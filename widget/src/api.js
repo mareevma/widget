@@ -10,30 +10,46 @@ export async function fetchCategories() {
   return data;
 }
 
-export async function fetchSections() {
+export async function fetchFits() {
   const { data, error } = await getSupabase()
-    .from('sections')
+    .from('fits')
     .select('*')
-    .eq('is_active', true)
     .order('sort_order');
   if (error) throw error;
   return data;
 }
 
-export async function fetchOptions() {
+export async function fetchMaterials() {
   const { data, error } = await getSupabase()
-    .from('options')
+    .from('materials')
     .select('*')
-    .eq('is_active', true)
     .order('sort_order');
   if (error) throw error;
   return data;
 }
 
-export async function fetchPricingRules() {
+export async function fetchProductVariants() {
   const { data, error } = await getSupabase()
-    .from('pricing_rules')
+    .from('product_variants')
     .select('*');
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchPrintMethods() {
+  const { data, error } = await getSupabase()
+    .from('print_methods')
+    .select('*')
+    .order('sort_order');
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchQuantityTiers() {
+  const { data, error } = await getSupabase()
+    .from('quantity_tiers')
+    .select('*')
+    .order('sort_order');
   if (error) throw error;
   return data;
 }
@@ -59,12 +75,15 @@ export async function submitOrder(order) {
 }
 
 export async function fetchAllData() {
-  const [categories, sections, options, pricingRules, colorPalettes] = await Promise.all([
-    fetchCategories(),
-    fetchSections(),
-    fetchOptions(),
-    fetchPricingRules(),
-    fetchColorPalettes(),
-  ]);
-  return { categories, sections, options, pricingRules, colorPalettes };
+  const [categories, fits, materials, productVariants, printMethods, quantityTiers, colorPalettes] =
+    await Promise.all([
+      fetchCategories(),
+      fetchFits(),
+      fetchMaterials(),
+      fetchProductVariants(),
+      fetchPrintMethods(),
+      fetchQuantityTiers(),
+      fetchColorPalettes(),
+    ]);
+  return { categories, fits, materials, productVariants, printMethods, quantityTiers, colorPalettes };
 }
