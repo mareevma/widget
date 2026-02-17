@@ -1,0 +1,5 @@
+{
+  "name": "merch-configurator",
+  "private": true,
+  "workspaces": ["widget", "admin"]
+}
