@@ -68,6 +68,10 @@ export const CSS = `
     margin-bottom: 24px;
   }
 
+  .section.hidden {
+    display: none;
+  }
+
   .section-title {
     font-size: 14px;
     font-weight: 600;
@@ -114,10 +118,15 @@ export const CSS = `
     font-weight: 500;
   }
 
-  .option-card .desc {
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-top: 4px;
+  .option-card.coming-soon {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .buttons-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .option-btn {
@@ -140,10 +149,57 @@ export const CSS = `
     border-color: var(--primary);
   }
 
-  .buttons-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  .material-btn {
+    background: var(--bg-card);
+    border: 2px solid transparent;
+    border-radius: var(--radius-btn);
+    padding: 10px 16px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--font);
+    transition: border-color 0.15s, background 0.15s;
+    text-align: left;
+  }
+
+  .material-btn:hover {
+    background: var(--bg-card-hover);
+  }
+
+  .material-btn.selected {
+    border-color: var(--primary);
+  }
+
+  .material-btn .mat-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  .print-btn {
+    background: var(--bg-card);
+    border: 2px solid transparent;
+    border-radius: var(--radius-btn);
+    padding: 8px 16px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--font);
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .print-btn:hover {
+    background: var(--bg-card-hover);
+  }
+
+  .print-btn.selected {
+    border-color: var(--primary);
+  }
+
+  .print-btn .price-badge {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-left: 4px;
   }
 
   .color-swatches {
@@ -175,31 +231,6 @@ export const CSS = `
     font-size: 12px;
     color: var(--text-secondary);
     margin-left: 4px;
-  }
-
-  .checkbox-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .checkbox-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg-card);
-    border: 2px solid transparent;
-    border-radius: var(--radius-btn);
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 13px;
-    color: var(--text);
-    font-family: var(--font);
-    transition: border-color 0.15s;
-  }
-
-  .checkbox-item.selected {
-    border-color: var(--primary);
   }
 
   .footer {
@@ -276,13 +307,21 @@ export const CSS = `
     background: var(--primary-hover);
   }
 
+  .submit-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .min-qty-hint {
+    font-size: 12px;
+    color: var(--primary);
+    margin-bottom: 8px;
+  }
+
   /* Modal */
   .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.7);
     display: flex;
     align-items: center;

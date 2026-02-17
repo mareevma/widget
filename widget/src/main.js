@@ -12,21 +12,29 @@ class MerchConfigurator extends HTMLElement {
   }
 
   async connectedCallback() {
-    // Get config from attributes
-    const url = this.getAttribute('supabase-url');
-    const key = this.getAttribute('supabase-key');
+    const envUrl = import.meta.env.VITE_SUPABASE_URL;
+    const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const attrUrl = this.getAttribute('supabase-url');
+    const attrKey = this.getAttribute('supabase-key');
+    const url = envUrl || attrUrl;
+    const key = envKey || attrKey;
 
     if (!url || !key) {
-      this.shadowRoot.innerHTML = '<p style="color:red">Missing supabase-url or supabase-key attributes</p>';
+      this.shadowRoot.innerHTML = `<p style="color:red">Missing Supabase config.</p>`;
       return;
     }
 
-    initSupabase(url, key);
-    this.render();
+    try {
+      initSupabase(url, key);
+    } catch (err) {
+      this.shadowRoot.innerHTML = `<p style="color:red">Invalid Supabase config: ${err.message}</p>`;
+      return;
+    }
+    this.renderShell();
     await this.loadData();
   }
 
-  render() {
+  renderShell() {
     this.shadowRoot.innerHTML = `
       <style>${CSS}</style>
       <div class="configurator">
@@ -34,9 +42,7 @@ class MerchConfigurator extends HTMLElement {
           <div class="preview-placeholder">Выберите изделие</div>
         </div>
         <div class="config-panel">
-          <div class="loading" style="text-align:center;padding:40px;color:var(--text-secondary)">
-            Загрузка...
-          </div>
+          <div style="text-align:center;padding:40px;color:#999">Загрузка...</div>
         </div>
       </div>
     `;
@@ -49,8 +55,8 @@ class MerchConfigurator extends HTMLElement {
       this.renderConfigurator();
       this.store.subscribe(() => this.onStateChange());
     } catch (err) {
-      const panel = this.shadowRoot.querySelector('.config-panel');
-      panel.innerHTML = `<p style="color:red;padding:20px">Ошибка загрузки: ${err.message}</p>`;
+      this.shadowRoot.querySelector('.config-panel').innerHTML =
+        `<p style="color:red;padding:20px">Ошибка загрузки: ${err.message}</p>`;
     }
   }
 
@@ -58,36 +64,58 @@ class MerchConfigurator extends HTMLElement {
     const data = this.store.getData();
     const panel = this.shadowRoot.querySelector('.config-panel');
 
-    let html = '';
-
-    // Category section
-    html += this.renderCategorySection(data.categories);
-
-    // Dynamic sections
-    for (const section of data.sections) {
-      if (section.slug === 'color') {
-        html += this.renderColorSection(section);
-      } else if (section.slug === 'customization') {
-        html += this.renderCustomizationSection(section, data.options.filter(o => o.section_id === section.id));
-      } else {
-        html += this.renderOptionSection(section);
-      }
+    // Find "Без нанесения" default
+    const noPrint = data.printMethods.find((m) => m.price === 0 || m.name === 'Без нанесения');
+    if (noPrint) {
+      this.store.update({ printFrontId: noPrint.id, printBackId: noPrint.id });
     }
 
-    // Footer
-    html += this.renderFooter();
+    panel.innerHTML = `
+      ${this._renderCategories(data.categories)}
+      <div class="section hidden" data-section="fit">
+        <div class="section-title">Фасон</div>
+        <div class="buttons-row" data-fit-buttons></div>
+      </div>
+      <div class="section hidden" data-section="material">
+        <div class="section-title">Материал</div>
+        <div class="buttons-row" data-material-buttons></div>
+      </div>
+      <div class="section hidden" data-section="color">
+        <div class="section-title">Цвет</div>
+        <div class="color-swatches" data-color-swatches></div>
+        <span class="color-name" data-color-name></span>
+      </div>
+      <div class="section hidden" data-section="print-front">
+        <div class="section-title">Нанесение спереди</div>
+        <div class="buttons-row" data-print-front-buttons></div>
+      </div>
+      <div class="section hidden" data-section="print-back">
+        <div class="section-title">Нанесение сзади</div>
+        <div class="buttons-row" data-print-back-buttons></div>
+      </div>
+      ${this._renderFooter()}
+    `;
 
-    panel.innerHTML = html;
-    this.bindEvents();
+    this._bindCategoryEvents();
+    this._bindFooterEvents();
   }
 
-  renderCategorySection(categories) {
-    const cards = categories.map(c => `
-      <div class="option-card" data-category-id="${c.id}">
-        ${c.image_url ? `<img src="${c.image_url}" alt="${c.name}">` : ''}
-        <div class="name">${c.name}</div>
-      </div>
-    `).join('');
+  /* ---- Render helpers ---- */
+
+  _renderCategories(categories) {
+    // Categories without variants get "coming soon"
+    const variants = this.store.getData().productVariants;
+    const cards = categories.map((c) => {
+      const hasVariants = variants.some((v) => v.category_id === c.id);
+      return `
+        <div class="option-card ${hasVariants ? '' : 'coming-soon'}"
+             data-category-id="${c.id}" ${hasVariants ? '' : 'data-disabled'}>
+          ${c.image_url ? `<img src="${c.image_url}" alt="${c.name}">` : ''}
+          <div class="name">${c.name}</div>
+          ${hasVariants ? '' : '<div style="font-size:11px;color:#999;margin-top:4px">Скоро появится</div>'}
+        </div>
+      `;
+    }).join('');
 
     return `
       <div class="section" data-section="category">
@@ -97,41 +125,7 @@ class MerchConfigurator extends HTMLElement {
     `;
   }
 
-  renderOptionSection(section) {
-    return `
-      <div class="section" data-section="${section.slug}">
-        <div class="section-title">${section.name}</div>
-        <div class="buttons-row" data-section-id="${section.id}"></div>
-      </div>
-    `;
-  }
-
-  renderColorSection(section) {
-    return `
-      <div class="section" data-section="color">
-        <div class="section-title">${section.name}</div>
-        <div class="color-swatches" data-section-id="${section.id}"></div>
-        <span class="color-name"></span>
-      </div>
-    `;
-  }
-
-  renderCustomizationSection(section, options) {
-    const items = options.map(o => `
-      <div class="checkbox-item" data-option-id="${o.id}">
-        ${o.name}
-      </div>
-    `).join('');
-
-    return `
-      <div class="section" data-section="customization">
-        <div class="section-title">${section.name}</div>
-        <div class="checkbox-grid">${items}</div>
-      </div>
-    `;
-  }
-
-  renderFooter() {
+  _renderFooter() {
     return `
       <div class="footer">
         <div class="quantity-row">
@@ -139,178 +133,205 @@ class MerchConfigurator extends HTMLElement {
           <input type="number" class="quantity-input" value="100" min="1">
           <span class="quantity-label">шт.</span>
         </div>
+        <div class="min-qty-hint" data-min-qty-hint style="display:none"></div>
         <div class="price-row">
-          <span class="price-unit">Цена за шт: <strong data-unit-price>0 ₽</strong></span>
-          <span class="price-total" data-total-price>0 ₽</span>
+          <span class="price-unit">Цена за шт: <strong data-unit-price>—</strong></span>
+          <span class="price-total" data-total-price>—</span>
         </div>
-        <button class="submit-btn">Оставить заявку</button>
+        <button class="submit-btn" disabled>Оставить заявку</button>
       </div>
     `;
   }
 
-  bindEvents() {
-    const shadow = this.shadowRoot;
+  /* ---- Event binding ---- */
 
-    // Category click
-    shadow.querySelectorAll('[data-category-id]').forEach(el => {
+  _bindCategoryEvents() {
+    this.shadowRoot.querySelectorAll('[data-category-id]').forEach((el) => {
+      if (el.hasAttribute('data-disabled')) return;
       el.addEventListener('click', () => {
-        const id = Number(el.dataset.categoryId);
-        this.store.update({ categoryId: id, selections: {}, customizations: [] });
-      });
-    });
-
-    // Quantity input
-    const qtyInput = shadow.querySelector('.quantity-input');
-    if (qtyInput) {
-      qtyInput.addEventListener('input', () => {
-        const qty = Math.max(1, parseInt(qtyInput.value) || 1);
-        this.store.update({ quantity: qty });
-      });
-    }
-
-    // Submit button
-    const submitBtn = shadow.querySelector('.submit-btn');
-    if (submitBtn) {
-      submitBtn.addEventListener('click', () => this.showOrderModal());
-    }
-
-    // Customization checkboxes
-    shadow.querySelectorAll('.checkbox-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const id = Number(el.dataset.optionId);
-        const customs = [...this.store.getState().customizations];
-        const idx = customs.indexOf(id);
-        if (idx >= 0) customs.splice(idx, 1);
-        else customs.push(id);
-        this.store.update({ customizations: customs });
+        this.store.selectCategory(Number(el.dataset.categoryId));
       });
     });
   }
+
+  _bindFooterEvents() {
+    const qtyInput = this.shadowRoot.querySelector('.quantity-input');
+    if (qtyInput) {
+      qtyInput.addEventListener('input', () => {
+        this.store.update({ quantity: Math.max(1, parseInt(qtyInput.value) || 1) });
+      });
+    }
+    const submitBtn = this.shadowRoot.querySelector('.submit-btn');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', () => this._showOrderModal());
+    }
+  }
+
+  /* ---- State change handler ---- */
 
   onStateChange() {
     const state = this.store.getState();
     const data = this.store.getData();
     const shadow = this.shadowRoot;
 
-    // Update category selection
-    shadow.querySelectorAll('[data-category-id]').forEach(el => {
+    // Category highlighting
+    shadow.querySelectorAll('[data-category-id]').forEach((el) => {
       el.classList.toggle('selected', Number(el.dataset.categoryId) === state.categoryId);
     });
 
-    // Update preview image
+    // Preview image
     const previewPanel = shadow.querySelector('.preview-panel');
-    const selectedCat = data.categories.find(c => c.id === state.categoryId);
-    if (selectedCat && selectedCat.image_url) {
-      previewPanel.innerHTML = `<img src="${selectedCat.image_url}" alt="${selectedCat.name}">`;
+    const cat = data.categories.find((c) => c.id === state.categoryId);
+    if (cat && cat.image_url) {
+      previewPanel.innerHTML = `<img src="${cat.image_url}" alt="${cat.name}">`;
     } else {
       previewPanel.innerHTML = '<div class="preview-placeholder">Выберите изделие</div>';
     }
 
-    // Update dynamic option sections
-    for (const section of data.sections) {
-      if (section.slug === 'color') {
-        this.updateColorSection(section, state);
-      } else if (section.slug !== 'customization') {
-        this.updateOptionSection(section, state);
-      }
-    }
+    // Fit section
+    this._updateFitSection(state);
 
-    // Update customization checkboxes
-    shadow.querySelectorAll('.checkbox-item').forEach(el => {
-      el.classList.toggle('selected', state.customizations.includes(Number(el.dataset.optionId)));
-    });
+    // Material section
+    this._updateMaterialSection(state);
 
-    // Update price
-    this.updatePrice(state);
+    // Color section
+    this._updateColorSection(state);
+
+    // Print sections
+    this._updatePrintSection(state, 'print-front', 'printFrontId', 'data-print-front-buttons');
+    this._updatePrintSection(state, 'print-back', 'printBackId', 'data-print-back-buttons');
+
+    // Price
+    this._updatePrice(state, data);
   }
 
-  updateOptionSection(section, state) {
-    const container = this.shadowRoot.querySelector(`[data-section-id="${section.id}"].buttons-row`);
-    if (!container) return;
-
-    const options = this.store.getOptionsForSection(section.id);
-    const selectedId = state.selections[section.slug];
-
-    container.innerHTML = options.map(o => `
-      <button class="option-btn ${o.id === selectedId ? 'selected' : ''}" data-opt-id="${o.id}" data-section-slug="${section.slug}">
-        ${o.name}
-        ${o.description ? `<br><small style="color:var(--text-secondary)">${o.description}</small>` : ''}
-      </button>
-    `).join('');
-
-    container.querySelectorAll('[data-opt-id]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const selections = { ...state.selections, [btn.dataset.sectionSlug]: Number(btn.dataset.optId) };
-        this.store.update({ selections });
-      });
-    });
-  }
-
-  updateColorSection(section, state) {
-    const container = this.shadowRoot.querySelector(`[data-section-id="${section.id}"].color-swatches`);
-    const nameEl = this.shadowRoot.querySelector('.color-name');
-    if (!container) return;
-
-    // Find selected material option
-    const materialSection = this.store.getData().sections.find(s => s.slug === 'material');
-    const materialOptId = materialSection ? state.selections['material'] : null;
-
-    if (!materialOptId) {
-      container.innerHTML = '<span style="color:var(--text-secondary);font-size:13px">Сначала выберите материал</span>';
-      if (nameEl) nameEl.textContent = '';
+  _updateFitSection(state) {
+    const section = this.shadowRoot.querySelector('[data-section="fit"]');
+    const container = this.shadowRoot.querySelector('[data-fit-buttons]');
+    if (!state.categoryId) {
+      section.classList.add('hidden');
       return;
     }
+    section.classList.remove('hidden');
+    const fits = this.store.getAvailableFits();
+    container.innerHTML = fits.map((f) =>
+      `<button class="option-btn ${f.id === state.fitId ? 'selected' : ''}" data-fit-id="${f.id}">${f.name}</button>`
+    ).join('');
+    container.querySelectorAll('[data-fit-id]').forEach((btn) => {
+      btn.addEventListener('click', () => this.store.selectFit(Number(btn.dataset.fitId)));
+    });
+  }
 
-    const colors = this.store.getColorsForMaterial(materialOptId);
-    const selectedColorId = state.selections['color'];
-
-    container.innerHTML = colors.map(c => `
-      <div class="color-swatch ${c.id === selectedColorId ? 'selected' : ''}"
-           data-color-id="${c.id}"
-           data-color-name="${c.color_name}"
-           style="background:${c.hex_code}"
-           title="${c.color_name}">
-      </div>
-    `).join('');
-
-    if (nameEl) {
-      const sel = colors.find(c => c.id === selectedColorId);
-      nameEl.textContent = sel ? sel.color_name : '';
+  _updateMaterialSection(state) {
+    const section = this.shadowRoot.querySelector('[data-section="material"]');
+    const container = this.shadowRoot.querySelector('[data-material-buttons]');
+    if (!state.fitId) {
+      section.classList.add('hidden');
+      return;
     }
+    section.classList.remove('hidden');
+    const materials = this.store.getAvailableMaterials();
+    container.innerHTML = materials.map((m) =>
+      `<button class="material-btn ${m.id === state.materialId ? 'selected' : ''}" data-material-id="${m.id}">
+        ${m.name}
+        ${m.description ? `<div class="mat-desc">${m.description}</div>` : ''}
+      </button>`
+    ).join('');
+    container.querySelectorAll('[data-material-id]').forEach((btn) => {
+      btn.addEventListener('click', () => this.store.selectMaterial(Number(btn.dataset.materialId)));
+    });
+  }
 
-    container.querySelectorAll('[data-color-id]').forEach(el => {
+  _updateColorSection(state) {
+    const section = this.shadowRoot.querySelector('[data-section="color"]');
+    const container = this.shadowRoot.querySelector('[data-color-swatches]');
+    const nameEl = this.shadowRoot.querySelector('[data-color-name]');
+    const colors = this.store.getAvailableColors();
+    if (!state.materialId || colors.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+    container.innerHTML = colors.map((c) =>
+      `<div class="color-swatch ${c.id === state.colorId ? 'selected' : ''}"
+           data-color-id="${c.id}" data-color-name="${c.color_name}"
+           style="background:${c.hex_code}" title="${c.color_name}"></div>`
+    ).join('');
+    const sel = colors.find((c) => c.id === state.colorId);
+    nameEl.textContent = sel ? sel.color_name : '';
+    container.querySelectorAll('[data-color-id]').forEach((el) => {
       el.addEventListener('click', () => {
-        const selections = { ...state.selections, color: Number(el.dataset.colorId) };
-        this.store.update({ selections });
+        this.store.update({ colorId: Number(el.dataset.colorId) });
       });
     });
   }
 
-  updatePrice(state) {
-    const data = this.store.getData();
-    const allOptionIds = [
-      ...Object.values(state.selections).filter(v => typeof v === 'number'),
-      ...state.customizations,
-    ];
+  _updatePrintSection(state, sectionName, stateKey, containerAttr) {
+    const section = this.shadowRoot.querySelector(`[data-section="${sectionName}"]`);
+    const container = this.shadowRoot.querySelector(`[${containerAttr}]`);
+    if (!state.materialId) {
+      section.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+    const methods = this.store.getData().printMethods;
+    const selectedId = state[stateKey];
+    container.innerHTML = methods.map((m) =>
+      `<button class="print-btn ${m.id === selectedId ? 'selected' : ''}" data-print-id="${m.id}" data-section-key="${stateKey}">
+        ${m.name}${Number(m.price) > 0 ? `<span class="price-badge">+${Number(m.price)}₽</span>` : ''}
+      </button>`
+    ).join('');
+    container.querySelectorAll('[data-print-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.store.update({ [btn.dataset.sectionKey]: Number(btn.dataset.printId) });
+      });
+    });
+  }
 
-    const { unitPrice, total } = calculatePrice(data.pricingRules, {
-      categoryId: state.categoryId,
-      optionIds: allOptionIds,
+  _updatePrice(state, data) {
+    const basePrice = this.store.getBasePrice();
+    const frontPrice = this.store.getPrintPrice(state.printFrontId);
+    const backPrice = this.store.getPrintPrice(state.printBackId);
+
+    const { unitPrice, total, multiplier } = calculatePrice({
+      basePrice,
+      frontPrintPrice: frontPrice,
+      backPrintPrice: backPrice,
       quantity: state.quantity,
+      tiers: data.quantityTiers,
     });
 
     const unitEl = this.shadowRoot.querySelector('[data-unit-price]');
     const totalEl = this.shadowRoot.querySelector('[data-total-price]');
-    if (unitEl) unitEl.textContent = `${unitPrice.toLocaleString('ru-RU')} ₽`;
-    if (totalEl) totalEl.textContent = `${total.toLocaleString('ru-RU')} ₽`;
+    const submitBtn = this.shadowRoot.querySelector('.submit-btn');
+    const hintEl = this.shadowRoot.querySelector('[data-min-qty-hint]');
+
+    if (basePrice > 0) {
+      unitEl.textContent = `${unitPrice.toLocaleString('ru-RU')} ₽`;
+      totalEl.textContent = `${total.toLocaleString('ru-RU')} ₽`;
+    } else {
+      unitEl.textContent = '—';
+      totalEl.textContent = '—';
+    }
+
+    // Enable submit only when full selection made
+    const canSubmit = state.categoryId && state.fitId && state.materialId && basePrice > 0;
+    submitBtn.disabled = !canSubmit;
+
+    // Min qty hint
+    if (state.quantity < 10 && hintEl) {
+      hintEl.style.display = 'block';
+      hintEl.textContent = 'При заказе менее 10 шт. действует повышенный коэффициент ×2.0';
+    } else if (hintEl) {
+      hintEl.style.display = 'none';
+    }
   }
 
-  showOrderModal() {
+  /* ---- Order modal ---- */
+
+  _showOrderModal() {
     const state = this.store.getState();
-    if (!state.categoryId) {
-      alert('Пожалуйста, выберите изделие');
-      return;
-    }
+    if (!state.categoryId) return;
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -352,14 +373,15 @@ class MerchConfigurator extends HTMLElement {
       }
 
       const data = this.store.getData();
-      const allOptionIds = [
-        ...Object.values(state.selections).filter(v => typeof v === 'number'),
-        ...state.customizations,
-      ];
-      const { unitPrice, total } = calculatePrice(data.pricingRules, {
-        categoryId: state.categoryId,
-        optionIds: allOptionIds,
+      const basePrice = this.store.getBasePrice();
+      const frontPrice = this.store.getPrintPrice(state.printFrontId);
+      const backPrice = this.store.getPrintPrice(state.printBackId);
+      const { unitPrice, total, multiplier } = calculatePrice({
+        basePrice,
+        frontPrintPrice: frontPrice,
+        backPrintPrice: backPrice,
         quantity: state.quantity,
+        tiers: data.quantityTiers,
       });
 
       try {
@@ -368,9 +390,15 @@ class MerchConfigurator extends HTMLElement {
           customer_contact: contact,
           customer_comment: comment || null,
           configuration: {
-            categoryId: state.categoryId,
-            selections: state.selections,
-            customizations: state.customizations,
+            category_id: state.categoryId,
+            fit_id: state.fitId,
+            material_id: state.materialId,
+            color_id: state.colorId,
+            print_front_id: state.printFrontId,
+            print_back_id: state.printBackId,
+            quantity: state.quantity,
+            unit_price: unitPrice,
+            multiplier,
           },
           quantity: state.quantity,
           calculated_price: total,
@@ -379,7 +407,7 @@ class MerchConfigurator extends HTMLElement {
         overlay.querySelector('.modal').innerHTML = `
           <div class="success-msg">
             <h2>Заявка отправлена!</h2>
-            <p style="color:var(--text-secondary)">Мы свяжемся с вами в ближайшее время.</p>
+            <p style="color:#999">Мы свяжемся с вами в ближайшее время.</p>
             <button class="submit-btn" style="margin-top:20px;width:auto;padding:12px 32px">Закрыть</button>
           </div>
         `;
