@@ -3,8 +3,11 @@ import { supabase } from '../supabase';
 
 const NAV = [
   { to: '/categories', label: 'Категории' },
-  { to: '/sections', label: 'Разделы и опции' },
-  { to: '/pricing', label: 'Цены' },
+  { to: '/fits', label: 'Фасоны' },
+  { to: '/materials', label: 'Материалы' },
+  { to: '/pricing', label: 'Цены (матрица)' },
+  { to: '/print-methods', label: 'Нанесение' },
+  { to: '/quantity-tiers', label: 'Множители' },
   { to: '/palettes', label: 'Палитры' },
   { to: '/orders', label: 'Заявки' },
 ];

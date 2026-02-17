@@ -4,8 +4,11 @@ import { supabase } from './supabase';
 import Login from './pages/Login';
 import Layout from './components/Layout';
 import Categories from './pages/Categories';
-import Sections from './pages/Sections';
+import Fits from './pages/Fits';
+import Materials from './pages/Materials';
 import Pricing from './pages/Pricing';
+import PrintMethods from './pages/PrintMethods';
+import QuantityTiers from './pages/QuantityTiers';
 import Palettes from './pages/Palettes';
 import Orders from './pages/Orders';
 
@@ -34,8 +37,11 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/categories" replace />} />
           <Route path="/categories" element={<Categories />} />
-          <Route path="/sections" element={<Sections />} />
+          <Route path="/fits" element={<Fits />} />
+          <Route path="/materials" element={<Materials />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/print-methods" element={<PrintMethods />} />
+          <Route path="/quantity-tiers" element={<QuantityTiers />} />
           <Route path="/palettes" element={<Palettes />} />
           <Route path="/orders" element={<Orders />} />
         </Routes>
