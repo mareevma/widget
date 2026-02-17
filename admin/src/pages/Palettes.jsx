@@ -13,20 +13,17 @@ export default function Palettes() {
 
   async function load() {
     setLoading(true);
-    // Get material section, then its options
-    const { data: sections } = await supabase.from('sections').select('id').eq('slug', 'material').single();
-    const materialSectionId = sections?.id;
-    const [{ data: opts }, { data: p }] = await Promise.all([
-      supabase.from('options').select('id, name').eq('section_id', materialSectionId).order('sort_order'),
+    const [{ data: m }, { data: p }] = await Promise.all([
+      supabase.from('materials').select('id, name').order('sort_order'),
       supabase.from('color_palettes').select('*').order('sort_order'),
     ]);
-    setMaterials(opts || []);
+    setMaterials(m || []);
     setPalettes(p || []);
-    if (!activeMaterialId && opts?.length) setActiveMaterialId(opts[0].id);
+    if (!activeMaterialId && m?.length) setActiveMaterialId(m[0].id);
     setLoading(false);
   }
 
-  const materialColors = palettes.filter(p => p.material_option_id === activeMaterialId);
+  const materialColors = palettes.filter(p => p.material_id === activeMaterialId);
 
   function startNew() {
     setForm({ color_name: '', hex_code: '#000000', sort_order: materialColors.length, is_active: true });
@@ -40,7 +37,7 @@ export default function Palettes() {
 
   async function save() {
     if (!form.color_name.trim()) return;
-    const payload = { ...form, material_option_id: activeMaterialId };
+    const payload = { ...form, material_id: activeMaterialId };
     if (editing === 'new') {
       await supabase.from('color_palettes').insert(payload);
     } else {
