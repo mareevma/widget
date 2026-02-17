@@ -1,54 +1,100 @@
 import { describe, it, expect } from 'vitest';
-import { calculatePrice, getTieredPrice } from '../src/pricing.js';
+import { getMultiplier, calculatePrice } from '../src/pricing.js';
 
-describe('getTieredPrice', () => {
+describe('getMultiplier', () => {
   const tiers = [
-    { min_qty: 1, max_qty: 49, price: 100 },
-    { min_qty: 50, max_qty: 99, price: 80 },
-    { min_qty: 100, max_qty: null, price: 60 },
+    { min_qty: 1, max_qty: 9, multiplier: 2.0 },
+    { min_qty: 10, max_qty: 19, multiplier: 0.9 },
+    { min_qty: 20, max_qty: 49, multiplier: 0.8 },
+    { min_qty: 50, max_qty: 99, multiplier: 0.7 },
+    { min_qty: 100, max_qty: 199, multiplier: 0.6 },
+    { min_qty: 200, max_qty: 499, multiplier: 0.5 },
+    { min_qty: 500, max_qty: 999, multiplier: 0.45 },
+    { min_qty: 1000, max_qty: null, multiplier: 0.4 },
   ];
 
-  it('returns price for first tier', () => {
-    expect(getTieredPrice(tiers, 10)).toBe(100);
+  it('returns 2.0 for qty=5', () => {
+    expect(getMultiplier(tiers, 5)).toBe(2.0);
   });
 
-  it('returns price for middle tier', () => {
-    expect(getTieredPrice(tiers, 75)).toBe(80);
+  it('returns 0.9 for qty=10', () => {
+    expect(getMultiplier(tiers, 10)).toBe(0.9);
   });
 
-  it('returns price for last tier (no max)', () => {
-    expect(getTieredPrice(tiers, 500)).toBe(60);
+  it('returns 0.6 for qty=100', () => {
+    expect(getMultiplier(tiers, 100)).toBe(0.6);
   });
 
-  it('returns 0 for empty tiers', () => {
-    expect(getTieredPrice([], 10)).toBe(0);
+  it('returns 0.4 for qty=1000', () => {
+    expect(getMultiplier(tiers, 1000)).toBe(0.4);
+  });
+
+  it('returns 0.4 for qty=5000 (open-ended last tier)', () => {
+    expect(getMultiplier(tiers, 5000)).toBe(0.4);
+  });
+
+  it('returns 1 when no tiers provided', () => {
+    expect(getMultiplier([], 100)).toBe(1);
   });
 });
 
 describe('calculatePrice', () => {
-  const rules = [
-    { category_id: 1, option_id: null, base_price: 500, price_type: 'fixed', tiers: null },
-    { category_id: null, option_id: 10, base_price: 200, price_type: 'fixed', tiers: null },
-    { category_id: null, option_id: 20, base_price: 0, price_type: 'tiered', tiers: [
-      { min_qty: 1, max_qty: 49, price: 150 },
-      { min_qty: 50, max_qty: null, price: 100 },
-    ]},
+  const tiers = [
+    { min_qty: 1, max_qty: 9, multiplier: 2.0 },
+    { min_qty: 10, max_qty: 19, multiplier: 0.9 },
+    { min_qty: 100, max_qty: 199, multiplier: 0.6 },
+    { min_qty: 1000, max_qty: null, multiplier: 0.4 },
   ];
 
-  it('sums fixed prices for selected options', () => {
-    const selection = { categoryId: 1, optionIds: [10], quantity: 1 };
-    // 500 (category base) + 200 (option 10) = 700
-    expect(calculatePrice(rules, selection)).toEqual({ unitPrice: 700, total: 700 });
+  it('calculates with no print methods', () => {
+    const result = calculatePrice({
+      basePrice: 1550,
+      frontPrintPrice: 0,
+      backPrintPrice: 0,
+      quantity: 1000,
+      tiers,
+    });
+    // subtotal = 1550, multiplier = 0.4, unit = 620, total = 620000
+    expect(result.unitPrice).toBe(620);
+    expect(result.total).toBe(620000);
+    expect(result.multiplier).toBe(0.4);
   });
 
-  it('applies tiered pricing based on quantity', () => {
-    const selection = { categoryId: 1, optionIds: [20], quantity: 100 };
-    // 500 (category base) + 100 (tiered, qty 100) = 600
-    expect(calculatePrice(rules, selection)).toEqual({ unitPrice: 600, total: 60000 });
+  it('calculates with front + back print', () => {
+    const result = calculatePrice({
+      basePrice: 1550,
+      frontPrintPrice: 250,
+      backPrintPrice: 500,
+      quantity: 100,
+      tiers,
+    });
+    // subtotal = 1550 + 250 + 500 = 2300, multiplier = 0.6, unit = 1380, total = 138000
+    expect(result.unitPrice).toBe(1380);
+    expect(result.total).toBe(138000);
   });
 
-  it('handles no matching rules gracefully', () => {
-    const selection = { categoryId: 99, optionIds: [], quantity: 1 };
-    expect(calculatePrice(rules, selection)).toEqual({ unitPrice: 0, total: 0 });
+  it('calculates with small quantity (multiplier > 1)', () => {
+    const result = calculatePrice({
+      basePrice: 1550,
+      frontPrintPrice: 250,
+      backPrintPrice: 0,
+      quantity: 5,
+      tiers,
+    });
+    // subtotal = 1800, multiplier = 2.0, unit = 3600, total = 18000
+    expect(result.unitPrice).toBe(3600);
+    expect(result.total).toBe(18000);
+  });
+
+  it('returns zeros when basePrice is 0', () => {
+    const result = calculatePrice({
+      basePrice: 0,
+      frontPrintPrice: 0,
+      backPrintPrice: 0,
+      quantity: 100,
+      tiers,
+    });
+    expect(result.unitPrice).toBe(0);
+    expect(result.total).toBe(0);
   });
 });
