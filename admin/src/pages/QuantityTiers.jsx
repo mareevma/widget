@@ -31,6 +31,10 @@ export default function QuantityTiers() {
     setEditing(tier);
   }
 
+  function bySortOrder(a, b) {
+    return Number(a.sort_order || 0) - Number(b.sort_order || 0);
+  }
+
   async function save() {
     const payload = {
       min_qty: form.min_qty,
@@ -39,25 +43,26 @@ export default function QuantityTiers() {
       sort_order: form.sort_order,
     };
     if (editing === 'new') {
-      await supabase.from('quantity_tiers').insert(payload);
+      const { data } = await supabase.from('quantity_tiers').insert(payload).select('*').single();
+      if (data) setTiers((prev) => [...prev, data].sort(bySortOrder));
     } else {
-      await supabase.from('quantity_tiers').update(payload).eq('id', editing.id);
+      const { data } = await supabase.from('quantity_tiers').update(payload).eq('id', editing.id).select('*').single();
+      if (data) setTiers((prev) => prev.map((x) => (x.id === data.id ? data : x)).sort(bySortOrder));
     }
     setEditing(null);
-    load();
   }
 
   async function remove(id) {
     if (!confirm('Удалить порог?')) return;
     await supabase.from('quantity_tiers').delete().eq('id', id);
-    load();
+    setTiers((prev) => prev.filter((x) => x.id !== id));
   }
 
   if (loading) return <p className="text-gray-400">Загрузка...</p>;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 className="text-xl font-bold">Множители (тираж)</h2>
         <button onClick={startNew} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
           + Добавить порог
@@ -66,8 +71,8 @@ export default function QuantityTiers() {
 
       {editing && (
         <div className="bg-gray-800 p-4 rounded-xl mb-6">
-          <div className="flex gap-4 items-end">
-            <div className="w-28">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="w-full sm:w-28">
               <label className="block text-gray-400 text-xs mb-1">От (шт)</label>
               <input
                 type="number"
@@ -76,7 +81,7 @@ export default function QuantityTiers() {
                 className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
-            <div className="w-28">
+            <div className="w-full sm:w-28">
               <label className="block text-gray-400 text-xs mb-1">До (шт)</label>
               <input
                 type="number"
@@ -86,7 +91,7 @@ export default function QuantityTiers() {
                 className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
-            <div className="w-28">
+            <div className="w-full sm:w-28">
               <label className="block text-gray-400 text-xs mb-1">Множитель</label>
               <input
                 type="number"
@@ -96,7 +101,7 @@ export default function QuantityTiers() {
                 className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
-            <div className="w-24">
+            <div className="w-full sm:w-24">
               <label className="block text-gray-400 text-xs mb-1">Порядок</label>
               <input
                 type="number"
@@ -105,8 +110,8 @@ export default function QuantityTiers() {
                 className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
-            <button onClick={save} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm">Сохранить</button>
-            <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-white px-4 py-2 text-sm">Отмена</button>
+            <button onClick={save} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm w-full sm:w-auto">Сохранить</button>
+            <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-white px-4 py-2 text-sm w-full sm:w-auto">Отмена</button>
           </div>
         </div>
       )}

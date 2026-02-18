@@ -1,51 +1,75 @@
 -- ============================================
--- Merch Configurator v2 — seed data
+-- Merch Configurator v4 — seed data (TZ-aligned)
 -- ============================================
 
--- Clear existing data
-TRUNCATE categories, fits, materials, product_variants, print_methods, quantity_tiers, color_palettes CASCADE;
+TRUNCATE
+  category_customization_prices,
+  category_customizations,
+  category_print_methods,
+  customizations,
+  category_fits,
+  category_materials,
+  product_variants,
+  color_palettes,
+  quantity_tiers,
+  print_methods,
+  materials,
+  fits,
+  categories
+RESTART IDENTITY CASCADE;
 
--- Categories (from Figma)
+-- Categories (product types from TZ)
 INSERT INTO categories (name, sort_order, is_active) VALUES
-  ('Худи', 1, true),
-  ('Футболки', 2, true),
-  ('Свитшот', 3, true),
-  ('Поло', 4, true),
-  ('Лонгслив', 5, true),
-  ('Шоппер', 6, true),
-  ('Аксессуары', 7, true),
-  ('Сувенирка', 8, true);
+  ('Футболки', 1, true),
+  ('Лонгсливы', 2, true),
+  ('Худи', 3, true),
+  ('Худи зип', 4, true),
+  ('Поло', 5, true),
+  ('Свитшоты', 6, true),
+  ('Бейсболки', 7, true),
+  ('Бомберы', 8, true),
+  ('Шопперы', 9, true);
 
 -- Fits
-INSERT INTO fits (name, sort_order) VALUES
-  ('Оверсайз', 1),
-  ('Стандарт', 2),
-  ('Длинный рукав', 3),
-  ('Оверсайз Зип', 4),
-  ('Стандарт Зип', 5);
+INSERT INTO fits (name, description, sort_order, is_active) VALUES
+  ('Оверсайз', 'Свободная посадка', 1, true),
+  ('Стандарт', 'Классическая посадка', 2, true),
+  ('Классика', 'Базовый крой для поло/лонгсливов', 3, true);
 
--- Materials
-INSERT INTO materials (name, description, sort_order) VALUES
-  ('240г френч терри', '92% хлопок / 8% полиэстер', 1),
-  ('250г х/б', '100% хлопок', 2),
-  ('300г х/б', '100% хлопок', 3),
-  ('200г 92/8', '92% хлопок / 8% полиэстер', 4),
-  ('230г пике', '100% хлопок, пике', 5),
-  ('300г пике', '100% хлопок, пике', 6),
-  ('420г х/б', '100% хлопок', 7),
-  ('380г 92/8 peach', '92% хлопок / 8% полиэстер, пич эффект', 8),
-  ('470г х/б', '100% хлопок', 9),
-  ('350г 92/8', '92% хлопок / 8% полиэстер', 10);
+-- Materials (grouped for flexible linking in admin)
+INSERT INTO materials (name, material_group, composition, description, sort_order, is_active) VALUES
+  ('Кулирка 200г', 'jersey', '92% хлопок / 8% полиэстер', 'Для футболок и лонгсливов', 1, true),
+  ('Кулирка 240г', 'jersey', '100% хлопок', 'Для футболок и лонгсливов', 2, true),
+  ('Кулирка 300г', 'jersey', '100% хлопок', 'Для футболок и лонгсливов', 3, true),
+  ('Френч терри 240г', 'jersey', '92% хлопок / 8% полиэстер', 'Для футболок и лонгсливов', 4, true),
+  ('Футер 330г петля', 'fleece', '92% хлопок / 8% полиэстер', 'Для худи/свитшотов/бомберов', 5, true),
+  ('Футер 330г начес', 'fleece', '92% хлопок / 8% полиэстер', 'Для худи/свитшотов/бомберов', 6, true),
+  ('Футер 350г пич эффект', 'fleece', '92% хлопок / 8% полиэстер', 'Для худи/свитшотов/бомберов', 7, true),
+  ('Футер 430г диагональ', 'fleece', '100% хлопок', 'Для худи/свитшотов/бомберов', 8, true),
+  ('Футер 430г микроначес', 'fleece', '100% хлопок', 'Для худи/свитшотов/бомберов', 9, true),
+  ('Футер 470г петля', 'fleece', '100% хлопок', 'Для худи/свитшотов/бомберов', 10, true),
+  ('Футер 500г петля', 'fleece', '100% хлопок', 'Для худи/свитшотов/бомберов', 11, true),
+  ('Пике 190г', 'pique', 'Пике', 'Для поло', 12, true),
+  ('Пике 210г', 'pique', 'Пике', 'Для поло', 13, true),
+  ('Пике 300г', 'pique', 'Пике', 'Для поло', 14, true);
 
 -- Print methods
-INSERT INTO print_methods (name, price, sort_order) VALUES
-  ('Без нанесения', 0, 1),
-  ('DTF', 250, 2),
-  ('Шелкография', 500, 3),
-  ('Пафф', 550, 4),
-  ('Флекстран', 650, 5),
-  ('Вышивка', 650, 6),
-  ('3D эмбосинг', 650, 7);
+INSERT INTO print_methods (name, description, price, sort_order, is_active) VALUES
+  ('Без нанесения', 'Без печати', 0, 1, true),
+  ('Шелкография (А4)', 'Классическая шелкография', 500, 2, true),
+  ('Шелкография (пафф) (А4)', 'Объемный эффект', 650, 3, true),
+  ('Шелкография (3D) (А4)', '3D печать шелкографией', 700, 4, true),
+  ('Вышивка (до А5)', 'Вышивка до формата A5', 800, 5, true),
+  ('Эмбосинг 3D (А4)', 'Тиснение с 3D-эффектом', 850, 6, true),
+  ('Флекстран (А5)', 'Термотрансфер до A5', 750, 7, true),
+  ('DTF (А4)', 'DTF-печать до A4', 600, 8, true);
+
+-- Customizations
+INSERT INTO customizations (name, description, price, sort_order, is_active) VALUES
+  ('Варка изделия', 'Дополнительная обработка ткани', 300, 1, true),
+  ('Дистресс', 'Состаривание/эффект потертости', 250, 2, true),
+  ('Лейблы', 'Кастомные лейблы и бирки', 200, 3, true),
+  ('Упаковка', 'Индивидуальная упаковка', 120, 4, true);
 
 -- Quantity tiers
 INSERT INTO quantity_tiers (min_qty, max_qty, multiplier, sort_order) VALUES
@@ -58,46 +82,64 @@ INSERT INTO quantity_tiers (min_qty, max_qty, multiplier, sort_order) VALUES
   (500, 999, 0.45, 7),
   (1000, NULL, 0.4, 8);
 
--- Product variants: Футболки (category 2)
--- Оверсайз (fit 1) + materials
-INSERT INTO product_variants (category_id, fit_id, material_id, base_price) VALUES
-  (2, 1, 1, 1550),   -- Футболки + Оверсайз + 240г френч терри
-  (2, 1, 2, 1550),   -- Футболки + Оверсайз + 250г х/б
-  (2, 1, 3, 1650),   -- Футболки + Оверсайз + 300г х/б
-  (2, 2, 2, 1550),   -- Футболки + Стандарт + 250г х/б
-  (2, 2, 4, 1650);   -- Футболки + Стандарт + 200г 92/8
+-- Product variants (base prices are placeholders and can be tuned in admin)
+INSERT INTO product_variants (category_id, fit_id, material_id, base_price)
+SELECT c.id, f.id, m.id,
+  CASE
+    WHEN c.name IN ('Футболки', 'Лонгсливы') THEN 1600
+    WHEN c.name IN ('Поло') THEN 1750
+    WHEN c.name IN ('Худи', 'Худи зип', 'Свитшоты', 'Бомберы') THEN 2600
+    ELSE 1900
+  END
+FROM categories c
+JOIN fits f ON
+  (c.name IN ('Футболки', 'Лонгсливы', 'Поло') AND f.name IN ('Оверсайз', 'Стандарт', 'Классика'))
+  OR (c.name IN ('Худи', 'Худи зип', 'Свитшоты', 'Бомберы') AND f.name IN ('Оверсайз', 'Стандарт'))
+JOIN materials m ON
+  (c.name IN ('Футболки', 'Лонгсливы') AND m.material_group = 'jersey')
+  OR (c.name IN ('Поло') AND m.material_group = 'pique')
+  OR (c.name IN ('Худи', 'Худи зип', 'Свитшоты', 'Бомберы') AND m.material_group = 'fleece');
 
--- Product variants: Поло (category 4)
-INSERT INTO product_variants (category_id, fit_id, material_id, base_price) VALUES
-  (4, 2, 5, 1550),   -- Поло + Стандарт + 230г пике
-  (4, 2, 6, 1650),   -- Поло + Стандарт + 300г пике
-  (4, 3, 5, 1550),   -- Поло + Длинный рукав + 230г пике
-  (4, 3, 6, 1650);   -- Поло + Длинный рукав + 300г пике
+-- Category bindings (derived from variants)
+INSERT INTO category_fits (category_id, fit_id, sort_order)
+SELECT DISTINCT pv.category_id, pv.fit_id, f.sort_order
+FROM product_variants pv
+JOIN fits f ON f.id = pv.fit_id
+ORDER BY pv.category_id, f.sort_order;
 
--- Product variants: Худи (category 1) — prices TBD, using placeholders
-INSERT INTO product_variants (category_id, fit_id, material_id, base_price) VALUES
-  (1, 1, 7, 2500),   -- Худи + Оверсайз + 420г х/б
-  (1, 1, 8, 2400),   -- Худи + Оверсайз + 380г 92/8 peach
-  (1, 1, 9, 2700),   -- Худи + Оверсайз + 470г х/б
-  (1, 4, 7, 2600),   -- Худи + Оверсайз Зип + 420г х/б
-  (1, 4, 8, 2500),   -- Худи + Оверсайз Зип + 380г 92/8 peach
-  (1, 4, 9, 2800),   -- Худи + Оверсайз Зип + 470г х/б
-  (1, 2, 10, 2300),  -- Худи + Стандарт + 350г 92/8
-  (1, 2, 8, 2400),   -- Худи + Стандарт + 380г 92/8 peach
-  (1, 5, 10, 2400),  -- Худи + Стандарт Зип + 350г 92/8
-  (1, 5, 8, 2500);   -- Худи + Стандарт Зип + 380г 92/8 peach
+INSERT INTO category_materials (category_id, material_id, sort_order)
+SELECT DISTINCT pv.category_id, pv.material_id, m.sort_order
+FROM product_variants pv
+JOIN materials m ON m.id = pv.material_id
+ORDER BY pv.category_id, m.sort_order;
 
--- Product variants: Свитшот (category 3) — prices TBD
-INSERT INTO product_variants (category_id, fit_id, material_id, base_price) VALUES
-  (3, 1, 7, 2200),   -- Свитшот + Оверсайз + 420г х/б
-  (3, 1, 8, 2100),   -- Свитшот + Оверсайз + 380г 92/8 peach
-  (3, 1, 9, 2400),   -- Свитшот + Оверсайз + 470г х/б
-  (3, 2, 10, 2000),  -- Свитшот + Стандарт + 350г 92/8
-  (3, 2, 8, 2100);   -- Свитшот + Стандарт + 380г 92/8 peach
+-- Bind print methods/customizations to categories that have variants
+INSERT INTO category_print_methods (category_id, print_method_id, sort_order)
+SELECT c.id, pm.id, pm.sort_order
+FROM categories c
+JOIN print_methods pm ON true
+WHERE EXISTS (SELECT 1 FROM product_variants pv WHERE pv.category_id = c.id);
 
--- Product variants: Лонгслив (category 5) — prices TBD
-INSERT INTO product_variants (category_id, fit_id, material_id, base_price) VALUES
-  (5, 1, 2, 1650),   -- Лонгслив + Оверсайз + 250г х/б
-  (5, 1, 3, 1750),   -- Лонгслив + Оверсайз + 300г х/б
-  (5, 2, 2, 1650),   -- Лонгслив + Стандарт + 250г х/б
-  (5, 2, 4, 1750);   -- Лонгслив + Стандарт + 200г 92/8
+INSERT INTO category_customizations (category_id, customization_id, sort_order)
+SELECT c.id, cu.id, cu.sort_order
+FROM categories c
+JOIN customizations cu ON true
+WHERE EXISTS (SELECT 1 FROM product_variants pv WHERE pv.category_id = c.id);
+
+-- Color palette per material (can be edited in admin later)
+WITH base_colors AS (
+  SELECT * FROM (VALUES
+    ('Белый', '#F2F2F2', 1),
+    ('Черный', '#1A1A1A', 2),
+    ('Серый', '#7A7A7A', 3),
+    ('Бежевый', '#D6C3A5', 4),
+    ('Синий', '#2F4F9D', 5),
+    ('Зеленый', '#4A7C59', 6),
+    ('Красный', '#B33A3A', 7),
+    ('Оранжевый', '#FF5100', 8)
+  ) AS t(color_name, hex_code, sort_order)
+)
+INSERT INTO color_palettes (material_id, color_name, hex_code, sort_order, is_active)
+SELECT m.id, bc.color_name, bc.hex_code, bc.sort_order, true
+FROM materials m
+CROSS JOIN base_colors bc;

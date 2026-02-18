@@ -3,3 +3,25 @@ node_modules/
 dist/
 .env
 .env.local
+.env.*.local
+
+# Package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build/cache artifacts
+.DS_Store
+.idea/
+.vscode/
+coverage/
+*.tsbuildinfo
+*.tmp
+
+# Vite
+.vite/
+
+# Keep env examples, ignore real env files
+admin/.env
+widget/.env

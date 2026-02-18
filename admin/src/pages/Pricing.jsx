@@ -6,6 +6,8 @@ export default function Pricing() {
   const [fits, setFits] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [variants, setVariants] = useState([]);
+  const [categoryFits, setCategoryFits] = useState([]);
+  const [categoryMaterials, setCategoryMaterials] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editingCell, setEditingCell] = useState(null); // { fitId, materialId }
@@ -15,16 +17,20 @@ export default function Pricing() {
 
   async function load() {
     setLoading(true);
-    const [{ data: c }, { data: f }, { data: m }, { data: v }] = await Promise.all([
+    const [{ data: c }, { data: f }, { data: m }, { data: v }, { data: cf }, { data: cm }] = await Promise.all([
       supabase.from('categories').select('id, name').order('sort_order'),
-      supabase.from('fits').select('*').order('sort_order'),
-      supabase.from('materials').select('*').order('sort_order'),
+      supabase.from('fits').select('id, name, sort_order, is_active').eq('is_active', true).order('sort_order'),
+      supabase.from('materials').select('id, name, sort_order, is_active').eq('is_active', true).order('sort_order'),
       supabase.from('product_variants').select('*'),
+      supabase.from('category_fits').select('*'),
+      supabase.from('category_materials').select('*'),
     ]);
     setCategories(c || []);
     setFits(f || []);
     setMaterials(m || []);
     setVariants(v || []);
+    setCategoryFits(cf || []);
+    setCategoryMaterials(cm || []);
     if (!activeCategoryId && c?.length) setActiveCategoryId(c[0].id);
     setLoading(false);
   }
@@ -74,11 +80,16 @@ export default function Pricing() {
 
   if (loading) return <p className="text-gray-400">Загрузка...</p>;
 
-  // Determine which fits/materials are relevant for this category
-  // Show all fits and materials so new combinations can be added
+  // Show only fits/materials explicitly bound to this category.
   const categoryVariants = variants.filter((v) => v.category_id === activeCategoryId);
-  const displayFits = fits;
-  const displayMaterials = materials;
+  const fitIds = new Set(
+    categoryFits.filter((x) => x.category_id === activeCategoryId).map((x) => x.fit_id)
+  );
+  const materialIds = new Set(
+    categoryMaterials.filter((x) => x.category_id === activeCategoryId).map((x) => x.material_id)
+  );
+  const displayFits = fits.filter((f) => fitIds.has(f.id));
+  const displayMaterials = materials.filter((m) => materialIds.has(m.id));
 
   return (
     <div>
@@ -100,12 +111,19 @@ export default function Pricing() {
       </div>
 
       <p className="text-gray-500 text-xs mb-4">
-        Кликните на ячейку, чтобы задать цену. Пустое поле = комбинация недоступна.
+        Кликните на ячейку, чтобы задать цену. Пустое поле = комбинация недоступна. Состав строк/колонок
+        настраивается в разделе "Товары: структура".
       </p>
 
       {/* Matrix table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+      <div className="max-w-full rounded-xl border border-gray-800 overflow-x-auto">
+        {displayFits.length === 0 || displayMaterials.length === 0 ? (
+          <div className="bg-gray-800 rounded-xl p-4 text-sm text-gray-300">
+            Для этой категории не заданы фасоны или материалы. Сначала настройте их в разделе
+            "Товары: структура".
+          </div>
+        ) : (
+        <table className="w-max min-w-full text-sm border-collapse">
           <thead>
             <tr>
               <th className="text-left text-gray-400 text-xs pb-3 pr-4 sticky left-0 bg-gray-900 z-10">
@@ -160,6 +178,7 @@ export default function Pricing() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       {categoryVariants.length > 0 && (

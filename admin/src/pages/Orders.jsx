@@ -11,7 +11,7 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
 
-  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
@@ -24,8 +24,12 @@ export default function Orders() {
 
   async function updateStatus(id, status) {
     await supabase.from('orders').update({ status }).eq('id', id);
-    load();
+    setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, status } : x)));
   }
+
+  const filteredOrders = statusFilter === 'all'
+    ? orders
+    : orders.filter((x) => x.status === statusFilter);
 
   if (loading) return <p className="text-gray-400">Загрузка...</p>;
 
@@ -33,7 +37,7 @@ export default function Orders() {
     <div>
       <h2 className="text-xl font-bold mb-6">Заявки</h2>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-6">
         <button
           onClick={() => setStatusFilter('all')}
           className={`px-3 py-1 rounded-lg text-sm ${statusFilter === 'all' ? 'bg-orange-500 text-white' : 'bg-gray-800 text-gray-300'}`}
@@ -52,15 +56,15 @@ export default function Orders() {
       </div>
 
       <div className="space-y-2">
-        {orders.map(order => (
+        {filteredOrders.map(order => (
           <div key={order.id} className="bg-gray-800 rounded-xl overflow-hidden">
             <div
-              className="p-4 flex items-center gap-4 cursor-pointer hover:bg-gray-750"
+              className="p-4 flex flex-wrap items-center gap-2 cursor-pointer hover:bg-gray-700"
               onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}
             >
               <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[order.status]}`} />
-              <span className="font-medium text-sm flex-1">{order.customer_name}</span>
-              <span className="text-gray-400 text-sm">{order.customer_contact}</span>
+              <span className="font-medium text-sm flex-1 min-w-[140px]">{order.customer_name}</span>
+              <span className="text-gray-400 text-sm break-all">{order.customer_contact}</span>
               <span className="text-sm font-semibold">{Number(order.calculated_price).toLocaleString('ru-RU')} ₽</span>
               <span className="text-gray-500 text-xs">{order.quantity} шт</span>
               <span className="text-gray-500 text-xs">{new Date(order.created_at).toLocaleDateString('ru-RU')}</span>
@@ -78,7 +82,7 @@ export default function Orders() {
                       {JSON.stringify(order.configuration, null, 2)}
                     </pre>
                   </div>
-                  <div className="flex gap-2 mt-3">
+                  <div className="flex flex-wrap gap-2 mt-3">
                     {STATUSES.map(s => (
                       <button
                         key={s}
@@ -98,7 +102,7 @@ export default function Orders() {
             )}
           </div>
         ))}
-        {orders.length === 0 && <p className="text-gray-500 text-sm">Нет заявок</p>}
+        {filteredOrders.length === 0 && <p className="text-gray-500 text-sm">Нет заявок</p>}
       </div>
     </div>
   );

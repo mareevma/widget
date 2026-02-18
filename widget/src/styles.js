@@ -14,8 +14,8 @@ export const CSS = `
     display: block;
     width: 100%;
     max-width: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: var(--widget-runtime-height, 100svh);
+    max-height: var(--widget-runtime-height, 100svh);
     font-family: var(--font);
     color: var(--text);
     background: var(--bg);
@@ -37,7 +37,7 @@ export const CSS = `
   .preview-panel {
     position: sticky;
     top: 0;
-    height: 100dvh;
+    height: 100%;
     min-height: 360px;
     display: flex;
     align-items: center;
@@ -489,41 +489,56 @@ export const CSS = `
   /* Mobile */
   @media (max-width: 768px) {
     :host {
-      height: auto;
-      max-height: none;
-      overflow: visible;
+      height: var(--widget-runtime-height, 100svh);
+      max-height: var(--widget-runtime-height, 100svh);
+      overflow: hidden;
+      border-radius: 0;
     }
 
     .configurator {
       grid-template-columns: 1fr;
-      height: auto;
-      overflow: visible;
+      grid-template-rows: minmax(180px, 34svh) minmax(0, 1fr);
+      height: 100%;
+      overflow: hidden;
     }
 
     .preview-panel {
       position: relative;
-      height: auto;
-      max-height: 250px;
-      min-height: 180px;
-      padding: 16px;
+      height: 100%;
+      max-height: none;
+      min-height: 0;
+      padding: 24px 16px 8px;
       top: 0;
-      margin-bottom: 4px;
+      margin-bottom: 0;
       z-index: 1;
+      align-items: flex-end;
+    }
+
+    .preview-panel img {
+      width: 100%;
+      height: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      object-position: center bottom;
     }
 
     .config-panel {
       padding: 0;
       position: relative;
       z-index: 3;
-      height: auto;
-      overflow: visible;
-      display: block;
+      height: 100%;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
     }
 
     .options-scroll {
-      overflow: visible;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
       padding: 16px 16px 0;
-      padding-bottom: 0;
+      padding-bottom: 12px;
     }
 
     .mobile-stepper {

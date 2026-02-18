@@ -24,6 +24,8 @@ class MerchConfigurator extends HTMLElement {
     this._stateFrame = null;
     this._lastRenderState = null;
     this._qtyInputTimer = null;
+    this._viewportSyncRaf = null;
+    this._boundSyncViewportHeight = this._syncViewportHeight.bind(this);
   }
 
   async connectedCallback() {
@@ -46,6 +48,7 @@ class MerchConfigurator extends HTMLElement {
       return;
     }
     this.renderShell();
+    this._setupViewportSync();
     await this.loadData();
   }
 
@@ -57,6 +60,11 @@ class MerchConfigurator extends HTMLElement {
     if (this._qtyInputTimer != null) {
       clearTimeout(this._qtyInputTimer);
       this._qtyInputTimer = null;
+    }
+    this._teardownViewportSync();
+    if (this._viewportSyncRaf != null) {
+      cancelAnimationFrame(this._viewportSyncRaf);
+      this._viewportSyncRaf = null;
     }
   }
 
@@ -76,19 +84,43 @@ class MerchConfigurator extends HTMLElement {
 
   async loadData() {
     try {
-      const data = await fetchAllData();
+      const data = await this._withTimeout(fetchAllData(), 15000);
       this.store.setData(data);
       this.renderConfigurator();
       this.store.subscribe(() => this._scheduleStateChange());
       this._scheduleStateChange();
     } catch (err) {
+      const message = err?.message || 'Неизвестная ошибка';
+      const timeoutError = /время|timeout|timed out/i.test(message);
       const extra =
         err instanceof TypeError
           ? ' Проверьте VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY в .env (без пробелов) и доступ к интернету.'
-          : '';
-      this.shadowRoot.querySelector('.config-panel').innerHTML =
-        `<p style="color:red;padding:20px">Ошибка загрузки: ${err.message}.${extra}</p>`;
+          : timeoutError
+            ? ' Превышено время ожидания ответа. Проверьте сеть или статус Supabase и попробуйте снова.'
+            : '';
+      this.shadowRoot.querySelector('.config-panel').innerHTML = `
+        <div style="padding:20px;color:#ff8f8f;font-size:14px;line-height:1.45">
+          Ошибка загрузки: ${message}.${extra}
+          <div style="margin-top:14px">
+            <button class="submit-btn" data-retry-load style="width:auto;padding:10px 16px">Повторить загрузку</button>
+          </div>
+        </div>
+      `;
+      const retryBtn = this.shadowRoot.querySelector('[data-retry-load]');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => this.loadData(), { once: true });
+      }
     }
+  }
+
+  _withTimeout(promise, timeoutMs) {
+    let timeoutId = null;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(`Время ожидания истекло (${timeoutMs} мс)`)), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => {
+      if (timeoutId != null) clearTimeout(timeoutId);
+    });
   }
 
   _scheduleStateChange() {
@@ -97,6 +129,45 @@ class MerchConfigurator extends HTMLElement {
       this._stateFrame = null;
       this.onStateChange();
     });
+  }
+
+  _setupViewportSync() {
+    this._scheduleViewportSync();
+    window.addEventListener('resize', this._boundSyncViewportHeight, { passive: true });
+    window.addEventListener('orientationchange', this._boundSyncViewportHeight, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this._boundSyncViewportHeight, { passive: true });
+      window.visualViewport.addEventListener('scroll', this._boundSyncViewportHeight, { passive: true });
+    }
+  }
+
+  _teardownViewportSync() {
+    window.removeEventListener('resize', this._boundSyncViewportHeight);
+    window.removeEventListener('orientationchange', this._boundSyncViewportHeight);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this._boundSyncViewportHeight);
+      window.visualViewport.removeEventListener('scroll', this._boundSyncViewportHeight);
+    }
+  }
+
+  _scheduleViewportSync() {
+    if (this._viewportSyncRaf != null) return;
+    this._viewportSyncRaf = requestAnimationFrame(() => {
+      this._viewportSyncRaf = null;
+      this._syncViewportHeight();
+    });
+  }
+
+  _syncViewportHeight() {
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    if (!viewportHeight) return;
+
+    const rect = this.getBoundingClientRect();
+    const topOffset = Math.max(rect.top, 0);
+    const available = Math.floor(viewportHeight - topOffset);
+
+    if (available < 320) return;
+    this.style.setProperty('--widget-runtime-height', `${available}px`);
   }
 
   renderConfigurator() {
