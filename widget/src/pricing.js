@@ -16,15 +16,15 @@ export function getMultiplier(tiers, quantity) {
 
 /**
  * Calculate price using v2 formula:
- *   subtotal = basePrice + frontPrintPrice + backPrintPrice
+ *   subtotal = basePrice + frontPrintPrice + backPrintPrice + customizationPrice
  *   unitPrice = subtotal × multiplier(qty)
  *   total = unitPrice × quantity
  *
- * @param {{basePrice: number, frontPrintPrice: number, backPrintPrice: number, quantity: number, tiers: Array}} params
+ * @param {{basePrice: number, frontPrintPrice: number, backPrintPrice: number, customizationPrice?: number, quantity: number, tiers: Array}} params
  * @returns {{unitPrice: number, total: number, multiplier: number, subtotal: number}}
  */
-export function calculatePrice({ basePrice, frontPrintPrice, backPrintPrice, quantity, tiers }) {
-  const subtotal = basePrice + frontPrintPrice + backPrintPrice;
+export function calculatePrice({ basePrice, frontPrintPrice, backPrintPrice, customizationPrice = 0, quantity, tiers }) {
+  const subtotal = basePrice + frontPrintPrice + backPrintPrice + customizationPrice;
   const multiplier = getMultiplier(tiers, quantity);
   const unitPrice = Math.round(subtotal * multiplier);
   const total = unitPrice * quantity;

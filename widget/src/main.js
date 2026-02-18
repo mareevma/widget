@@ -9,6 +9,21 @@ class MerchConfigurator extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.store = createStore();
+    this.mobileStepOrder = ['category', 'fit', 'material', 'color', 'print-front', 'print-back', 'customization'];
+    this.mobileStepLabels = {
+      category: 'Изделие',
+      fit: 'Фасон',
+      material: 'Материал',
+      color: 'Цвет',
+      'print-front': 'Спереди',
+      'print-back': 'Сзади',
+      customization: 'Кастомизация',
+    };
+    this.activeMobileStep = 'category';
+    this._delegatedEventsBound = false;
+    this._stateFrame = null;
+    this._lastRenderState = null;
+    this._qtyInputTimer = null;
   }
 
   async connectedCallback() {
@@ -16,8 +31,8 @@ class MerchConfigurator extends HTMLElement {
     const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     const attrUrl = this.getAttribute('supabase-url');
     const attrKey = this.getAttribute('supabase-key');
-    const url = envUrl || attrUrl;
-    const key = envKey || attrKey;
+    const url = (envUrl || attrUrl || '').trim();
+    const key = (envKey || attrKey || '').trim();
 
     if (!url || !key) {
       this.shadowRoot.innerHTML = `<p style="color:red">Missing Supabase config.</p>`;
@@ -32,6 +47,17 @@ class MerchConfigurator extends HTMLElement {
     }
     this.renderShell();
     await this.loadData();
+  }
+
+  disconnectedCallback() {
+    if (this._stateFrame != null) {
+      cancelAnimationFrame(this._stateFrame);
+      this._stateFrame = null;
+    }
+    if (this._qtyInputTimer != null) {
+      clearTimeout(this._qtyInputTimer);
+      this._qtyInputTimer = null;
+    }
   }
 
   renderShell() {
@@ -53,11 +79,24 @@ class MerchConfigurator extends HTMLElement {
       const data = await fetchAllData();
       this.store.setData(data);
       this.renderConfigurator();
-      this.store.subscribe(() => this.onStateChange());
+      this.store.subscribe(() => this._scheduleStateChange());
+      this._scheduleStateChange();
     } catch (err) {
+      const extra =
+        err instanceof TypeError
+          ? ' Проверьте VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY в .env (без пробелов) и доступ к интернету.'
+          : '';
       this.shadowRoot.querySelector('.config-panel').innerHTML =
-        `<p style="color:red;padding:20px">Ошибка загрузки: ${err.message}</p>`;
+        `<p style="color:red;padding:20px">Ошибка загрузки: ${err.message}.${extra}</p>`;
     }
+  }
+
+  _scheduleStateChange() {
+    if (this._stateFrame != null) return;
+    this._stateFrame = requestAnimationFrame(() => {
+      this._stateFrame = null;
+      this.onStateChange();
+    });
   }
 
   renderConfigurator() {
@@ -71,33 +110,42 @@ class MerchConfigurator extends HTMLElement {
     }
 
     panel.innerHTML = `
-      ${this._renderCategories(data.categories)}
-      <div class="section hidden" data-section="fit">
-        <div class="section-title">Фасон</div>
-        <div class="buttons-row" data-fit-buttons></div>
-      </div>
-      <div class="section hidden" data-section="material">
-        <div class="section-title">Материал</div>
-        <div class="buttons-row" data-material-buttons></div>
-      </div>
-      <div class="section hidden" data-section="color">
-        <div class="section-title">Цвет</div>
-        <div class="color-swatches" data-color-swatches></div>
-        <span class="color-name" data-color-name></span>
-      </div>
-      <div class="section hidden" data-section="print-front">
-        <div class="section-title">Нанесение спереди</div>
-        <div class="buttons-row" data-print-front-buttons></div>
-      </div>
-      <div class="section hidden" data-section="print-back">
-        <div class="section-title">Нанесение сзади</div>
-        <div class="buttons-row" data-print-back-buttons></div>
+      <div class="options-scroll">
+        ${this._renderMobileStepper()}
+        ${this._renderCategories(data.categories)}
+        <div class="section hidden" data-section="fit">
+          <div class="section-title">Фасон</div>
+          <div class="buttons-row" data-fit-buttons></div>
+        </div>
+        <div class="section hidden" data-section="material">
+          <div class="section-title">Материал</div>
+          <div class="buttons-row" data-material-buttons></div>
+        </div>
+        <div class="section hidden" data-section="color">
+          <div class="section-title">Цвет</div>
+          <div class="color-swatches" data-color-swatches></div>
+          <span class="color-name" data-color-name></span>
+        </div>
+        <div class="section hidden" data-section="print-front">
+          <div class="section-title">Нанесение спереди</div>
+          <div class="buttons-row" data-print-front-buttons></div>
+        </div>
+        <div class="section hidden" data-section="print-back">
+          <div class="section-title">Нанесение сзади</div>
+          <div class="buttons-row" data-print-back-buttons></div>
+        </div>
+        <div class="section hidden" data-section="customization">
+          <div class="section-title">Кастомизация</div>
+          <div class="buttons-row" data-customization-buttons></div>
+        </div>
       </div>
       ${this._renderFooter()}
     `;
 
-    this._bindCategoryEvents();
+    this._bindDelegatedEvents();
     this._bindFooterEvents();
+    this._bindMobileStepperEvents();
+    this._updateMobileStepper(this.store.getState());
   }
 
   /* ---- Render helpers ---- */
@@ -138,32 +186,121 @@ class MerchConfigurator extends HTMLElement {
           <span class="price-unit">Цена за шт: <strong data-unit-price>—</strong></span>
           <span class="price-total" data-total-price>—</span>
         </div>
+        <div class="price-extra" data-customizations-price style="display:none"></div>
         <button class="submit-btn" disabled>Оставить заявку</button>
+      </div>
+    `;
+  }
+
+  _renderMobileStepper() {
+    const steps = this.mobileStepOrder.map((stepKey) =>
+      `<button type="button" class="mobile-step-btn" data-mobile-step="${stepKey}">
+        ${this.mobileStepLabels[stepKey]}
+      </button>`
+    ).join('');
+
+    return `
+      <div class="mobile-stepper" data-mobile-stepper>
+        <div class="mobile-stepper-meta">
+          <span class="mobile-step-progress" data-mobile-step-progress>Шаг 1 из 1</span>
+          <button type="button" class="mobile-next-btn" data-mobile-next-btn>Далее</button>
+        </div>
+        <div class="mobile-steps-row">
+          ${steps}
+        </div>
       </div>
     `;
   }
 
   /* ---- Event binding ---- */
 
-  _bindCategoryEvents() {
-    this.shadowRoot.querySelectorAll('[data-category-id]').forEach((el) => {
-      if (el.hasAttribute('data-disabled')) return;
-      el.addEventListener('click', () => {
-        this.store.selectCategory(Number(el.dataset.categoryId));
-      });
+  _bindDelegatedEvents() {
+    if (this._delegatedEventsBound) return;
+    this._delegatedEventsBound = true;
+    this.shadowRoot.addEventListener('click', (e) => {
+      const categoryCard = e.target.closest('[data-category-id]');
+      if (categoryCard && !categoryCard.hasAttribute('data-disabled')) {
+        this.store.selectCategory(Number(categoryCard.dataset.categoryId));
+        return;
+      }
+
+      const fitBtn = e.target.closest('[data-fit-id]');
+      if (fitBtn) {
+        this.store.selectFit(Number(fitBtn.dataset.fitId));
+        return;
+      }
+
+      const materialBtn = e.target.closest('[data-material-id]');
+      if (materialBtn) {
+        this.store.selectMaterial(Number(materialBtn.dataset.materialId));
+        return;
+      }
+
+      const colorItem = e.target.closest('[data-color-id]');
+      if (colorItem) {
+        this.store.update({ colorId: Number(colorItem.dataset.colorId) });
+        return;
+      }
+
+      const printBtn = e.target.closest('[data-print-id]');
+      if (printBtn) {
+        this.store.update({ [printBtn.dataset.sectionKey]: Number(printBtn.dataset.printId) });
+        return;
+      }
+
+      const customizationBtn = e.target.closest('[data-customization-id]');
+      if (customizationBtn) {
+        const id = Number(customizationBtn.dataset.customizationId);
+        const selected = new Set(this.store.getState().customizationIds || []);
+        this.store.toggleCustomization(id, !selected.has(id));
+      }
     });
   }
 
   _bindFooterEvents() {
     const qtyInput = this.shadowRoot.querySelector('.quantity-input');
     if (qtyInput) {
+      const commitQuantity = () => {
+        this.store.update({ quantity: Math.max(1, parseInt(qtyInput.value, 10) || 1) });
+      };
       qtyInput.addEventListener('input', () => {
-        this.store.update({ quantity: Math.max(1, parseInt(qtyInput.value) || 1) });
+        if (this._qtyInputTimer != null) clearTimeout(this._qtyInputTimer);
+        // Avoid full UI recalculation on every keystroke on slower mobile CPUs.
+        this._qtyInputTimer = setTimeout(() => {
+          this._qtyInputTimer = null;
+          commitQuantity();
+        }, 120);
       });
+      qtyInput.addEventListener('change', commitQuantity);
     }
     const submitBtn = this.shadowRoot.querySelector('.submit-btn');
     if (submitBtn) {
       submitBtn.addEventListener('click', () => this._showOrderModal());
+    }
+  }
+
+  _bindMobileStepperEvents() {
+    this.shadowRoot.querySelectorAll('[data-mobile-step]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const step = btn.dataset.mobileStep;
+        const state = this.store.getState();
+        if (!this._isStepVisible(step, state)) return;
+        this.activeMobileStep = step;
+        this._updateMobileStepper(state);
+        this._updateMobileSectionsVisibility(state);
+      });
+    });
+
+    const nextBtn = this.shadowRoot.querySelector('[data-mobile-next-btn]');
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        const state = this.store.getState();
+        const nextStep = this._getNextVisibleStep(state, this.activeMobileStep);
+        if (!nextStep) return;
+        this.activeMobileStep = nextStep;
+        this._updateMobileStepper(state);
+        this._updateMobileSectionsVisibility(state);
+      });
     }
   }
 
@@ -173,36 +310,201 @@ class MerchConfigurator extends HTMLElement {
     const state = this.store.getState();
     const data = this.store.getData();
     const shadow = this.shadowRoot;
+    const prev = this._lastRenderState;
 
-    // Category highlighting
-    shadow.querySelectorAll('[data-category-id]').forEach((el) => {
-      el.classList.toggle('selected', Number(el.dataset.categoryId) === state.categoryId);
-    });
+    const categoryChanged = !prev || prev.categoryId !== state.categoryId;
+    const fitChanged = !prev || prev.fitId !== state.fitId;
+    const materialChanged = !prev || prev.materialId !== state.materialId;
+    const colorChanged = !prev || prev.colorId !== state.colorId;
+    const printFrontChanged = !prev || prev.printFrontId !== state.printFrontId;
+    const printBackChanged = !prev || prev.printBackId !== state.printBackId;
+    const customizationsChanged = !prev || !this._sameIds(prev.customizationIds, state.customizationIds);
+    const quantityChanged = !prev || prev.quantity !== state.quantity;
+    const mobileStepMightChange =
+      categoryChanged || fitChanged || materialChanged || colorChanged || printFrontChanged || printBackChanged || customizationsChanged;
 
-    // Preview image
-    const previewPanel = shadow.querySelector('.preview-panel');
-    const cat = data.categories.find((c) => c.id === state.categoryId);
-    if (cat && cat.image_url) {
-      previewPanel.innerHTML = `<img src="${cat.image_url}" alt="${cat.name}">`;
-    } else {
-      previewPanel.innerHTML = '<div class="preview-placeholder">Выберите изделие</div>';
+    if (categoryChanged) {
+      // Category highlighting
+      shadow.querySelectorAll('[data-category-id]').forEach((el) => {
+        el.classList.toggle('selected', Number(el.dataset.categoryId) === state.categoryId);
+      });
     }
 
-    // Fit section
-    this._updateFitSection(state);
+    if (categoryChanged) {
+      // Preview image
+      const previewPanel = shadow.querySelector('.preview-panel');
+      const cat = data.categories.find((c) => c.id === state.categoryId);
+      if (cat && cat.image_url) {
+        previewPanel.innerHTML = `<img src="${cat.image_url}" alt="${cat.name}">`;
+      } else {
+        previewPanel.innerHTML = '<div class="preview-placeholder">Выберите изделие</div>';
+      }
+    }
 
-    // Material section
-    this._updateMaterialSection(state);
+    if (categoryChanged || fitChanged) {
+      this._updateFitSection(state);
+    }
 
-    // Color section
-    this._updateColorSection(state);
+    if (categoryChanged || fitChanged || materialChanged) {
+      this._updateMaterialSection(state);
+    }
 
-    // Print sections
-    this._updatePrintSection(state, 'print-front', 'printFrontId', 'data-print-front-buttons');
-    this._updatePrintSection(state, 'print-back', 'printBackId', 'data-print-back-buttons');
+    if (materialChanged || colorChanged) {
+      this._updateColorSection(state);
+    }
 
-    // Price
-    this._updatePrice(state, data);
+    if (categoryChanged || materialChanged || printFrontChanged) {
+      this._updatePrintSection(state, 'print-front', 'printFrontId', 'data-print-front-buttons');
+    }
+    if (categoryChanged || materialChanged || printBackChanged) {
+      this._updatePrintSection(state, 'print-back', 'printBackId', 'data-print-back-buttons');
+    }
+    if (categoryChanged || customizationsChanged) {
+      this._updateCustomizationSection(state);
+    }
+
+    if (
+      categoryChanged ||
+      fitChanged ||
+      materialChanged ||
+      printFrontChanged ||
+      printBackChanged ||
+      customizationsChanged ||
+      quantityChanged
+    ) {
+      this._updatePrice(state, data);
+    }
+    if (mobileStepMightChange) {
+      this._autoAdvanceMobileStep(state);
+      this._updateMobileStepper(state);
+      this._updateMobileSectionsVisibility(state);
+    }
+
+    this._lastRenderState = { ...state, customizationIds: [...(state.customizationIds || [])] };
+  }
+
+  _sameIds(a = [], b = []) {
+    if (a === b) return true;
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  _isMobileViewport() {
+    return window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  _isStepVisible(step, state) {
+    switch (step) {
+      case 'category':
+        return true;
+      case 'fit':
+        return Boolean(state.categoryId);
+      case 'material':
+        return Boolean(state.fitId);
+      case 'color':
+        return Boolean(state.materialId) && this.store.getAvailableColors().length > 0;
+      case 'print-front':
+      case 'print-back':
+        return Boolean(state.materialId);
+      case 'customization':
+        return Boolean(state.categoryId) && this.store.getAvailableCustomizations().length > 0;
+      default:
+        return false;
+    }
+  }
+
+  _isStepComplete(step, state) {
+    switch (step) {
+      case 'category':
+        return Boolean(state.categoryId);
+      case 'fit':
+        return Boolean(state.fitId);
+      case 'material':
+        return Boolean(state.materialId);
+      case 'color':
+        return Boolean(state.colorId) || this.store.getAvailableColors().length === 0;
+      case 'print-front':
+        return Boolean(state.printFrontId);
+      case 'print-back':
+        return Boolean(state.printBackId);
+      case 'customization':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  _getVisibleMobileSteps(state) {
+    return this.mobileStepOrder.filter((step) => this._isStepVisible(step, state));
+  }
+
+  _getNextVisibleStep(state, step) {
+    const visibleSteps = this._getVisibleMobileSteps(state);
+    const currentIdx = visibleSteps.indexOf(step);
+    if (currentIdx === -1) return visibleSteps[0] || null;
+    return visibleSteps[currentIdx + 1] || null;
+  }
+
+  _autoAdvanceMobileStep(state) {
+    if (!this._isMobileViewport()) return;
+    if (!this._isStepVisible(this.activeMobileStep, state)) {
+      this.activeMobileStep = this.mobileStepOrder.find((step) => this._isStepVisible(step, state)) || 'category';
+      return;
+    }
+    if (!this._isStepComplete(this.activeMobileStep, state)) return;
+    const currentIdx = this.mobileStepOrder.indexOf(this.activeMobileStep);
+    for (let idx = currentIdx + 1; idx < this.mobileStepOrder.length; idx += 1) {
+      const step = this.mobileStepOrder[idx];
+      if (this._isStepVisible(step, state)) {
+        this.activeMobileStep = step;
+        return;
+      }
+    }
+  }
+
+  _updateMobileStepper(state) {
+    const visibleSteps = this._getVisibleMobileSteps(state);
+    const activeVisibleIdx = visibleSteps.indexOf(this.activeMobileStep);
+    const progressEl = this.shadowRoot.querySelector('[data-mobile-step-progress]');
+    const nextBtn = this.shadowRoot.querySelector('[data-mobile-next-btn]');
+
+    if (progressEl) {
+      const stepNo = activeVisibleIdx >= 0 ? activeVisibleIdx + 1 : 1;
+      progressEl.textContent = `Шаг ${stepNo} из ${Math.max(visibleSteps.length, 1)}`;
+    }
+    if (nextBtn) {
+      const hasNext = Boolean(this._getNextVisibleStep(state, this.activeMobileStep));
+      nextBtn.disabled = !hasNext;
+    }
+
+    this.shadowRoot.querySelectorAll('[data-mobile-step]').forEach((btn) => {
+      const step = btn.dataset.mobileStep;
+      const visible = this._isStepVisible(step, state);
+      const complete = this._isStepComplete(step, state);
+      btn.classList.toggle('is-active', step === this.activeMobileStep);
+      btn.classList.toggle('is-complete', complete);
+      btn.classList.toggle('is-hidden', !visible);
+    });
+  }
+
+  _updateMobileSectionsVisibility(state) {
+    if (!this._isMobileViewport()) {
+      this.shadowRoot.querySelectorAll('[data-section]').forEach((section) => {
+        section.classList.remove('mobile-hidden');
+      });
+      return;
+    }
+
+    this.shadowRoot.querySelectorAll('[data-section]').forEach((section) => {
+      const sectionKey = section.dataset.section;
+      const isAllowed = this._isStepVisible(sectionKey, state);
+      const isActive = sectionKey === this.activeMobileStep;
+      section.classList.toggle('mobile-hidden', !isAllowed || !isActive);
+    });
   }
 
   _updateFitSection(state) {
@@ -217,9 +519,6 @@ class MerchConfigurator extends HTMLElement {
     container.innerHTML = fits.map((f) =>
       `<button class="option-btn ${f.id === state.fitId ? 'selected' : ''}" data-fit-id="${f.id}">${f.name}</button>`
     ).join('');
-    container.querySelectorAll('[data-fit-id]').forEach((btn) => {
-      btn.addEventListener('click', () => this.store.selectFit(Number(btn.dataset.fitId)));
-    });
   }
 
   _updateMaterialSection(state) {
@@ -237,9 +536,6 @@ class MerchConfigurator extends HTMLElement {
         ${m.description ? `<div class="mat-desc">${m.description}</div>` : ''}
       </button>`
     ).join('');
-    container.querySelectorAll('[data-material-id]').forEach((btn) => {
-      btn.addEventListener('click', () => this.store.selectMaterial(Number(btn.dataset.materialId)));
-    });
   }
 
   _updateColorSection(state) {
@@ -253,17 +549,28 @@ class MerchConfigurator extends HTMLElement {
     }
     section.classList.remove('hidden');
     container.innerHTML = colors.map((c) =>
-      `<div class="color-swatch ${c.id === state.colorId ? 'selected' : ''}"
+      `<div class="color-swatch ${this._isVeryDarkColor(c.hex_code) ? 'dark' : ''} ${c.id === state.colorId ? 'selected' : ''}"
            data-color-id="${c.id}" data-color-name="${c.color_name}"
-           style="background:${c.hex_code}" title="${c.color_name}"></div>`
+           style="
+             background-color:${c.hex_code};
+             ${c.swatch_image_url ? `background-image:url('${c.swatch_image_url}');background-size:cover;background-position:center;` : ''}
+           "
+           title="${c.color_name}"></div>`
     ).join('');
     const sel = colors.find((c) => c.id === state.colorId);
     nameEl.textContent = sel ? sel.color_name : '';
-    container.querySelectorAll('[data-color-id]').forEach((el) => {
-      el.addEventListener('click', () => {
-        this.store.update({ colorId: Number(el.dataset.colorId) });
-      });
-    });
+  }
+
+  _isVeryDarkColor(hex) {
+    if (!hex || typeof hex !== 'string') return false;
+    const normalized = hex.trim().replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return false;
+    const r = parseInt(normalized.slice(0, 2), 16);
+    const g = parseInt(normalized.slice(2, 4), 16);
+    const b = parseInt(normalized.slice(4, 6), 16);
+    // Relative luminance approximation for quick UI contrast checks
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return luminance < 0.12;
   }
 
   _updatePrintSection(state, sectionName, stateKey, containerAttr) {
@@ -274,29 +581,58 @@ class MerchConfigurator extends HTMLElement {
       return;
     }
     section.classList.remove('hidden');
-    const methods = this.store.getData().printMethods;
-    const selectedId = state[stateKey];
+    const methods = this.store.getAvailablePrintMethods();
+    if (methods.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    let selectedId = state[stateKey];
+    if (!methods.some((m) => m.id === selectedId)) {
+      const fallback = methods.find((m) => Number(m.price) === 0) || methods[0];
+      selectedId = fallback?.id ?? null;
+      if (selectedId != null) {
+        this.store.update({ [stateKey]: selectedId });
+      }
+    }
     container.innerHTML = methods.map((m) =>
       `<button class="print-btn ${m.id === selectedId ? 'selected' : ''}" data-print-id="${m.id}" data-section-key="${stateKey}">
         ${m.name}${Number(m.price) > 0 ? `<span class="price-badge">+${Number(m.price)}₽</span>` : ''}
       </button>`
     ).join('');
-    container.querySelectorAll('[data-print-id]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        this.store.update({ [btn.dataset.sectionKey]: Number(btn.dataset.printId) });
-      });
-    });
+  }
+
+  _updateCustomizationSection(state) {
+    const section = this.shadowRoot.querySelector('[data-section="customization"]');
+    const container = this.shadowRoot.querySelector('[data-customization-buttons]');
+    if (!state.categoryId) {
+      section.classList.add('hidden');
+      return;
+    }
+    const items = this.store.getAvailableCustomizations();
+    if (items.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+    const selected = new Set(state.customizationIds || []);
+    container.innerHTML = items.map((item) =>
+      `<button class="print-btn ${selected.has(item.id) ? 'selected' : ''}" data-customization-id="${item.id}">
+        ${item.name}${Number(item.price) > 0 ? `<span class="price-badge">+${Number(item.price)}₽</span>` : ''}
+      </button>`
+    ).join('');
   }
 
   _updatePrice(state, data) {
     const basePrice = this.store.getBasePrice();
     const frontPrice = this.store.getPrintPrice(state.printFrontId);
     const backPrice = this.store.getPrintPrice(state.printBackId);
+    const customizationPrice = this.store.getCustomizationsPrice(state.customizationIds);
 
     const { unitPrice, total, multiplier } = calculatePrice({
       basePrice,
       frontPrintPrice: frontPrice,
       backPrintPrice: backPrice,
+      customizationPrice,
       quantity: state.quantity,
       tiers: data.quantityTiers,
     });
@@ -305,6 +641,7 @@ class MerchConfigurator extends HTMLElement {
     const totalEl = this.shadowRoot.querySelector('[data-total-price]');
     const submitBtn = this.shadowRoot.querySelector('.submit-btn');
     const hintEl = this.shadowRoot.querySelector('[data-min-qty-hint]');
+    const customizationsEl = this.shadowRoot.querySelector('[data-customizations-price]');
 
     if (basePrice > 0) {
       unitEl.textContent = `${unitPrice.toLocaleString('ru-RU')} ₽`;
@@ -317,6 +654,15 @@ class MerchConfigurator extends HTMLElement {
     // Enable submit only when full selection made
     const canSubmit = state.categoryId && state.fitId && state.materialId && basePrice > 0;
     submitBtn.disabled = !canSubmit;
+
+    if (customizationsEl) {
+      if (customizationPrice > 0) {
+        customizationsEl.style.display = 'block';
+        customizationsEl.textContent = `Кастомизации: +${customizationPrice.toLocaleString('ru-RU')} ₽ за шт`;
+      } else {
+        customizationsEl.style.display = 'none';
+      }
+    }
 
     // Min qty hint
     if (state.quantity < 10 && hintEl) {
@@ -376,10 +722,12 @@ class MerchConfigurator extends HTMLElement {
       const basePrice = this.store.getBasePrice();
       const frontPrice = this.store.getPrintPrice(state.printFrontId);
       const backPrice = this.store.getPrintPrice(state.printBackId);
+      const customizationPrice = this.store.getCustomizationsPrice(state.customizationIds);
       const { unitPrice, total, multiplier } = calculatePrice({
         basePrice,
         frontPrintPrice: frontPrice,
         backPrintPrice: backPrice,
+        customizationPrice,
         quantity: state.quantity,
         tiers: data.quantityTiers,
       });
@@ -396,8 +744,10 @@ class MerchConfigurator extends HTMLElement {
             color_id: state.colorId,
             print_front_id: state.printFrontId,
             print_back_id: state.printBackId,
+            customization_ids: state.customizationIds || [],
             quantity: state.quantity,
             unit_price: unitPrice,
+            customization_price: customizationPrice,
             multiplier,
           },
           quantity: state.quantity,
@@ -413,7 +763,11 @@ class MerchConfigurator extends HTMLElement {
         `;
         overlay.querySelector('.submit-btn').addEventListener('click', () => overlay.remove());
       } catch (err) {
-        alert('Ошибка отправки: ' + err.message);
+        const details =
+          err && err.code === '42501'
+            ? ' Доступ на вставку в таблицу orders запрещен RLS-политикой.'
+            : '';
+        alert('Ошибка отправки: ' + err.message + details);
       }
     });
   }

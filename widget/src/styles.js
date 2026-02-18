@@ -12,6 +12,10 @@ export const CSS = `
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
     display: block;
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
     font-family: var(--font);
     color: var(--text);
     background: var(--bg);
@@ -24,22 +28,29 @@ export const CSS = `
   .configurator {
     display: grid;
     grid-template-columns: 45% 55%;
-    min-height: 600px;
+    height: 100%;
+    align-items: start;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .preview-panel {
     position: sticky;
     top: 0;
-    height: 100vh;
-    max-height: 800px;
+    height: 100dvh;
+    min-height: 360px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--bg);
-    padding: 24px;
+    padding: 20px 24px;
+    overflow: hidden;
+    z-index: 1;
   }
 
   .preview-panel img {
+    width: 100%;
+    height: 100%;
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
@@ -59,16 +70,41 @@ export const CSS = `
   }
 
   .config-panel {
-    padding: 24px;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    min-width: 0;
+    position: relative;
+    z-index: 2;
+    scrollbar-gutter: stable;
+  }
+
+  .options-scroll {
+    min-height: 0;
     overflow-y: auto;
-    max-height: 800px;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px 24px 12px;
+    padding-bottom: 12px;
   }
 
   .section {
     margin-bottom: 24px;
+    min-width: 0;
   }
 
   .section.hidden {
+    display: none;
+  }
+
+  .section.mobile-hidden {
+    display: none;
+  }
+
+  .mobile-stepper {
     display: none;
   }
 
@@ -108,7 +144,8 @@ export const CSS = `
   .option-card img {
     width: 100%;
     height: 80px;
-    object-fit: cover;
+    object-fit: contain;
+    background: #1f1f1f;
     border-radius: 8px;
     margin-bottom: 8px;
   }
@@ -127,6 +164,8 @@ export const CSS = `
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    width: 100%;
+    min-width: 0;
   }
 
   .option-btn {
@@ -139,6 +178,9 @@ export const CSS = `
     font-size: 13px;
     font-family: var(--font);
     transition: border-color 0.15s, background 0.15s;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .option-btn:hover {
@@ -160,6 +202,9 @@ export const CSS = `
     font-family: var(--font);
     transition: border-color 0.15s, background 0.15s;
     text-align: left;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .material-btn:hover {
@@ -186,6 +231,9 @@ export const CSS = `
     font-size: 13px;
     font-family: var(--font);
     transition: border-color 0.15s, background 0.15s;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .print-btn:hover {
@@ -207,11 +255,14 @@ export const CSS = `
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+    align-content: flex-start;
+    width: 100%;
   }
 
   .color-swatch {
     width: 32px;
     height: 32px;
+    flex: 0 0 auto;
     border-radius: 50%;
     border: 2px solid transparent;
     cursor: pointer;
@@ -227,6 +278,11 @@ export const CSS = `
     box-shadow: 0 0 0 2px var(--primary);
   }
 
+  .color-swatch.dark {
+    border-color: #5A5A5A;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+  }
+
   .color-name {
     font-size: 12px;
     color: var(--text-secondary);
@@ -234,11 +290,11 @@ export const CSS = `
   }
 
   .footer {
-    position: sticky;
-    bottom: 0;
+    position: static;
     background: var(--bg);
     border-top: 1px solid var(--bg-card);
     padding: 16px 24px;
+    z-index: 20;
   }
 
   .quantity-row {
@@ -285,6 +341,13 @@ export const CSS = `
   .price-total {
     font-size: 20px;
     font-weight: 700;
+    word-break: break-word;
+  }
+
+  .price-extra {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
   }
 
   .submit-btn {
@@ -335,6 +398,8 @@ export const CSS = `
     padding: 32px;
     width: 90%;
     max-width: 420px;
+    max-height: 90dvh;
+    overflow: auto;
   }
 
   .modal h2 {
@@ -423,24 +488,216 @@ export const CSS = `
 
   /* Mobile */
   @media (max-width: 768px) {
+    :host {
+      height: auto;
+      max-height: none;
+      overflow: visible;
+    }
+
     .configurator {
       grid-template-columns: 1fr;
+      height: auto;
+      overflow: visible;
     }
 
     .preview-panel {
       position: relative;
       height: auto;
       max-height: 250px;
+      min-height: 180px;
       padding: 16px;
+      top: 0;
+      margin-bottom: 4px;
+      z-index: 1;
     }
 
     .config-panel {
-      max-height: none;
-      padding: 16px;
+      padding: 0;
+      position: relative;
+      z-index: 3;
+      height: auto;
+      overflow: visible;
+      display: block;
+    }
+
+    .options-scroll {
+      overflow: visible;
+      padding: 16px 16px 0;
+      padding-bottom: 0;
+    }
+
+    .mobile-stepper {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: sticky;
+      top: 0;
+      z-index: 7;
+      background: var(--bg);
+      padding-top: 6px;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--bg-card);
+    }
+
+    .mobile-stepper-meta {
+      display: none;
+    }
+
+    .mobile-step-progress {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .mobile-next-btn {
+      border: 1px solid var(--bg-card-hover);
+      background: var(--bg-card);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-family: var(--font);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .mobile-next-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .mobile-steps-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+
+    .mobile-step-btn {
+      flex: 0 0 auto;
+      border: 1px solid var(--bg-card-hover);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      border-radius: 999px;
+      padding: 7px 12px;
+      white-space: nowrap;
+      font-size: 12px;
+      line-height: 1;
+      font-family: var(--font);
+      cursor: pointer;
+    }
+
+    .option-card,
+    .option-btn,
+    .material-btn,
+    .print-btn,
+    .color-swatch,
+    .submit-btn {
+      transition: none;
+    }
+
+    .color-swatch:hover {
+      transform: none;
+    }
+
+    .mobile-step-btn.is-active {
+      border-color: var(--primary);
+      color: var(--text);
+    }
+
+    .mobile-step-btn.is-complete {
+      color: var(--text);
+      background: #303030;
+    }
+
+    .mobile-step-btn.is-hidden {
+      display: none;
     }
 
     .options-grid {
       grid-template-columns: repeat(2, 1fr);
+    }
+
+    .buttons-row {
+      gap: 6px;
+    }
+
+    .material-btn,
+    .print-btn {
+      flex: 1 1 calc(50% - 6px);
+      min-width: 0;
+      padding: 9px 12px;
+      font-size: 12px;
+    }
+
+    .option-btn {
+      flex: 1 1 calc(50% - 6px);
+      min-width: 0;
+      padding: 8px 10px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .color-swatches {
+      gap: 7px;
+    }
+
+    .color-name {
+      display: block;
+      margin-top: 8px;
+      margin-left: 0;
+    }
+
+    .footer {
+      position: static;
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .price-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .quantity-row {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .modal {
+      width: 94%;
+      padding: 18px;
+      max-height: 88dvh;
+    }
+
+    .modal-actions {
+      flex-direction: column;
+    }
+
+    .modal-cancel,
+    .modal-submit {
+      width: 100%;
+      flex: none;
+    }
+  }
+
+  @media (max-height: 760px) and (min-width: 769px) {
+    .preview-panel {
+      padding: 14px 18px;
+    }
+
+    .config-panel {
+      padding: 16px 18px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
     }
   }
 `;

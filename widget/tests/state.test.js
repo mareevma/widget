@@ -34,6 +34,11 @@ describe('createStore', () => {
         { category_id: 1, fit_id: 2, material_id: 1, base_price: 1550 },
         { category_id: 2, fit_id: 3, material_id: 1, base_price: 1550 },
       ],
+      categoryFits: [
+        { category_id: 1, fit_id: 1, sort_order: 1 },
+        { category_id: 1, fit_id: 2, sort_order: 2 },
+      ],
+      categoryMaterials: [],
       printMethods: [],
       quantityTiers: [],
       colorPalettes: [],
@@ -59,6 +64,12 @@ describe('createStore', () => {
         { category_id: 1, fit_id: 1, material_id: 1, base_price: 1550 },
         { category_id: 1, fit_id: 1, material_id: 2, base_price: 1550 },
         { category_id: 1, fit_id: 2, material_id: 3, base_price: 1650 },
+      ],
+      categoryFits: [],
+      categoryMaterials: [
+        { category_id: 1, material_id: 1, sort_order: 1 },
+        { category_id: 1, material_id: 2, sort_order: 2 },
+        { category_id: 1, material_id: 3, sort_order: 3 },
       ],
       printMethods: [],
       quantityTiers: [],
@@ -103,6 +114,8 @@ describe('createStore', () => {
       productVariants: [
         { category_id: 1, fit_id: 1, material_id: 2, base_price: 1550 },
       ],
+      categoryFits: [],
+      categoryMaterials: [],
       printMethods: [],
       quantityTiers: [],
       colorPalettes: [],
@@ -119,6 +132,8 @@ describe('createStore', () => {
       fits: [],
       materials: [],
       productVariants: [],
+      categoryFits: [],
+      categoryMaterials: [],
       printMethods: [
         { id: 1, name: 'Без нанесения', price: 0 },
         { id: 2, name: 'DTF', price: 250 },
@@ -139,6 +154,8 @@ describe('createStore', () => {
       fits: [],
       materials: [],
       productVariants: [],
+      categoryFits: [],
+      categoryMaterials: [],
       printMethods: [],
       quantityTiers: [],
       colorPalettes: [
@@ -151,5 +168,69 @@ describe('createStore', () => {
     const colors = store.getAvailableColors();
     expect(colors).toHaveLength(1);
     expect(colors[0].color_name).toBe('Чёрный');
+  });
+
+  it('falls back to global palette when material-specific colors are missing', () => {
+    const store = createStore();
+    store.setData({
+      categories: [],
+      fits: [],
+      materials: [],
+      productVariants: [],
+      categoryFits: [],
+      categoryMaterials: [],
+      printMethods: [],
+      quantityTiers: [],
+      colorPalettes: [
+        { id: 1, material_id: null, color_name: 'Черный', hex_code: '#000' },
+        { id: 2, material_id: null, color_name: 'Белый', hex_code: '#fff' },
+      ],
+    });
+    store.update({ materialId: 999 });
+
+    const colors = store.getAvailableColors();
+    expect(colors).toHaveLength(2);
+  });
+
+  it('returns print methods bound to category', () => {
+    const store = createStore();
+    store.setData({
+      printMethods: [
+        { id: 1, name: 'Без нанесения', price: 0 },
+        { id: 2, name: 'DTF', price: 200 },
+      ],
+      categoryPrintMethods: [{ category_id: 10, print_method_id: 2, sort_order: 1 }],
+    });
+    store.update({ categoryId: 10 });
+
+    const methods = store.getAvailablePrintMethods();
+    expect(methods).toHaveLength(1);
+    expect(methods[0].id).toBe(2);
+  });
+
+  it('calculates selected customizations price', () => {
+    const store = createStore();
+    store.setData({
+      customizations: [
+        { id: 1, name: 'Варка', price: 300 },
+        { id: 2, name: 'Лейблы', price: 200 },
+      ],
+    });
+    expect(store.getCustomizationsPrice([1, 2])).toBe(500);
+  });
+
+  it('uses category customization price override when present', () => {
+    const store = createStore();
+    store.setData({
+      customizations: [
+        { id: 1, name: 'Варка', price: 300 },
+        { id: 2, name: 'Лейблы', price: 200 },
+      ],
+      categoryCustomizationPrices: [
+        { category_id: 7, customization_id: 1, price: 450 },
+      ],
+    });
+    store.update({ categoryId: 7 });
+    expect(store.getCustomizationsPrice([1, 2])).toBe(650);
   });
 });

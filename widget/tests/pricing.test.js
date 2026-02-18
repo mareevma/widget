@@ -73,6 +73,20 @@ describe('calculatePrice', () => {
     expect(result.total).toBe(138000);
   });
 
+  it('includes customization price in subtotal', () => {
+    const result = calculatePrice({
+      basePrice: 1550,
+      frontPrintPrice: 250,
+      backPrintPrice: 500,
+      customizationPrice: 200,
+      quantity: 100,
+      tiers,
+    });
+    // subtotal = 2500, multiplier = 0.6, unit = 1500, total = 150000
+    expect(result.unitPrice).toBe(1500);
+    expect(result.total).toBe(150000);
+  });
+
   it('calculates with small quantity (multiplier > 1)', () => {
     const result = calculatePrice({
       basePrice: 1550,
