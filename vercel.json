@@ -1,0 +1,11 @@
+{
+  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace=admin",
+  "outputDirectory": "admin/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
