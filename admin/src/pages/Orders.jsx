@@ -7,18 +7,73 @@ const STATUS_COLORS = { new: 'bg-orange-500', in_progress: 'bg-blue-500', done: 
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
+  const [categoriesById, setCategoriesById] = useState({});
+  const [fitsById, setFitsById] = useState({});
+  const [materialsById, setMaterialsById] = useState({});
+  const [colorsById, setColorsById] = useState({});
+  const [printsById, setPrintsById] = useState({});
+  const [customizationsById, setCustomizationsById] = useState({});
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => { load(); }, []);
 
+  function indexById(rows, nameField = 'name') {
+    const index = {};
+    (rows || []).forEach((row) => {
+      index[row.id] = row[nameField];
+    });
+    return index;
+  }
+
+  function formatConfig(order) {
+    const cfg = order.configuration || {};
+    const customizationNames = Array.isArray(cfg.customization_ids)
+      ? cfg.customization_ids.map((id) => customizationsById[id] || `ID ${id}`)
+      : [];
+
+    return [
+      ['Изделие', categoriesById[cfg.category_id], cfg.category_id],
+      ['Фасон', fitsById[cfg.fit_id], cfg.fit_id],
+      ['Материал', materialsById[cfg.material_id], cfg.material_id],
+      ['Цвет', colorsById[cfg.color_id], cfg.color_id],
+      ['Принт спереди', printsById[cfg.print_front_id], cfg.print_front_id],
+      ['Принт сзади', printsById[cfg.print_back_id], cfg.print_back_id],
+      ['Кастомизации', customizationNames.length ? customizationNames.join(', ') : '—', null],
+      ['Тираж', typeof cfg.quantity !== 'undefined' ? `${cfg.quantity} шт` : null, null],
+      ['Цена за шт', typeof cfg.unit_price !== 'undefined' ? `${Number(cfg.unit_price).toLocaleString('ru-RU')} ₽` : null, null],
+      ['Коэффициент', typeof cfg.multiplier !== 'undefined' ? `x${cfg.multiplier}` : null, null],
+    ].filter(([, value]) => value !== null && value !== undefined && value !== '');
+  }
+
   async function load() {
     setLoading(true);
-    let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
-    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-    const { data } = await query;
-    setOrders(data || []);
+    const [
+      { data: ordersData },
+      { data: categoriesData },
+      { data: fitsData },
+      { data: materialsData },
+      { data: colorsData },
+      { data: printsData },
+      { data: customizationsData },
+    ] = await Promise.all([
+      supabase.from('orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('categories').select('id, name'),
+      supabase.from('fits').select('id, name'),
+      supabase.from('materials').select('id, name'),
+      supabase.from('color_palettes').select('id, color_name'),
+      supabase.from('print_methods').select('id, name'),
+      supabase.from('customizations').select('id, name'),
+    ]);
+
+    setOrders(ordersData || []);
+    setCategoriesById(indexById(categoriesData, 'name'));
+    setFitsById(indexById(fitsData, 'name'));
+    setMaterialsById(indexById(materialsData, 'name'));
+    setColorsById(indexById(colorsData, 'color_name'));
+    setPrintsById(indexById(printsData, 'name'));
+    setCustomizationsById(indexById(customizationsData, 'name'));
     setLoading(false);
   }
 
@@ -77,10 +132,16 @@ export default function Orders() {
                     <p className="text-sm text-gray-400">Комментарий: {order.customer_comment}</p>
                   )}
                   <div>
-                    <p className="text-xs text-gray-500 mb-1">Конфигурация:</p>
-                    <pre className="text-xs bg-gray-900 p-2 rounded overflow-x-auto">
-                      {JSON.stringify(order.configuration, null, 2)}
-                    </pre>
+                    <p className="text-xs text-gray-500 mb-2">Конфигурация:</p>
+                    <div className="bg-gray-900 p-3 rounded space-y-1">
+                      {formatConfig(order).map(([label, value, id]) => (
+                        <p key={label} className="text-xs text-gray-300">
+                          <span className="text-gray-500">{label}:</span>{' '}
+                          {value}
+                          {id ? <span className="text-gray-600"> (ID {id})</span> : null}
+                        </p>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
                     {STATUSES.map(s => (
