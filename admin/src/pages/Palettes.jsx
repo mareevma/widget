@@ -144,7 +144,10 @@ export default function Palettes() {
     if (!materialId) return alert('Сначала выберите материал');
     setUploading(true);
     const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-    const safeName = (form.color_name || 'swatch').toLowerCase().replace(/\s+/g, '-');
+    const safeName = (form.color_name || 'swatch')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'swatch';
     const path = `swatches/material-${materialId}/${Date.now()}-${safeName}.${ext}`;
     const { error: uploadErr } = await supabase.storage.from('images').upload(path, file);
     if (uploadErr) {

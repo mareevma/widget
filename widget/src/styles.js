@@ -537,7 +537,7 @@ export const CSS = `
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
-      padding: 16px 16px 0;
+      padding: 0 16px 0;
       padding-bottom: 12px;
     }
 
@@ -547,12 +547,17 @@ export const CSS = `
       gap: 8px;
       position: sticky;
       top: 0;
-      z-index: 7;
+      z-index: 20;
       background: var(--bg);
-      padding-top: 6px;
+      padding-top: 12px;
       padding-bottom: 10px;
       margin-bottom: 10px;
       border-bottom: 1px solid var(--bg-card);
+    }
+
+    .options-scroll > .section {
+      position: relative;
+      z-index: 1;
     }
 
     .mobile-stepper-meta {
