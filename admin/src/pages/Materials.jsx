@@ -4,7 +4,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } 
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '../supabase';
 
-function SortableMaterialRow({ material }) {
+function SortableMaterialRow({ material, onUploadImage, uploading }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: material.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -22,10 +22,23 @@ function SortableMaterialRow({ material }) {
       {...listeners}
     >
       <span className="text-gray-500 text-lg leading-none" aria-hidden>::</span>
+      <div className="w-12 h-12 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
+        {material.image_url
+          ? <img src={material.image_url} className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">—</div>
+        }
+      </div>
       <div className="flex-1">
         <span className="font-medium text-sm">{material.name}</span>
         {material.description && <span className="text-gray-500 text-xs ml-2">{material.description}</span>}
       </div>
+      <label className="text-xs text-gray-400 cursor-pointer hover:text-orange-400">
+        {uploading ? '...' : 'Фото'}
+        <input type="file" accept="image/*" className="hidden" onChange={e => {
+          e.stopPropagation();
+          if (e.target.files?.[0]) onUploadImage(material.id, e.target.files[0]);
+        }} />
+      </label>
     </div>
   );
 }
@@ -35,6 +48,7 @@ export default function Materials() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', description: '' });
+  const [uploading, setUploading] = useState(false);
   const [sortMode, setSortMode] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
@@ -88,6 +102,17 @@ export default function Materials() {
     if (!confirm('Удалить материал? Это удалит все связанные варианты.')) return;
     await supabase.from('materials').delete().eq('id', id);
     setMaterials((prev) => prev.filter((x) => x.id !== id));
+  }
+
+  async function uploadImage(matId, file) {
+    setUploading(true);
+    const path = `materials/${matId}-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadErr } = await supabase.storage.from('images').upload(path, file);
+    if (uploadErr) { alert(uploadErr.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(path);
+    await supabase.from('materials').update({ image_url: publicUrl }).eq('id', matId);
+    setUploading(false);
+    setMaterials((prev) => prev.map((x) => (x.id === matId ? { ...x, image_url: publicUrl } : x)));
   }
 
   async function saveOrder(nextRows) {
@@ -167,7 +192,7 @@ export default function Materials() {
             <SortableContext items={sortedMaterials.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {sortedMaterials.map((material) => (
-                  <SortableMaterialRow key={material.id} material={material} />
+                  <SortableMaterialRow key={material.id} material={material} uploading={uploading} onUploadImage={uploadImage} />
                 ))}
               </div>
             </SortableContext>
@@ -177,10 +202,22 @@ export default function Materials() {
         <div className="space-y-2">
           {sortedMaterials.map(mat => (
             <div key={mat.id} className="bg-gray-800 p-3 rounded-xl flex flex-wrap items-center gap-3">
+              <div className="w-12 h-12 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
+                {mat.image_url
+                  ? <img src={mat.image_url} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">—</div>
+                }
+              </div>
               <div className="flex-1">
                 <span className="font-medium text-sm">{mat.name}</span>
                 {mat.description && <span className="text-gray-500 text-xs ml-2">{mat.description}</span>}
               </div>
+              <label className="text-xs text-gray-400 cursor-pointer hover:text-orange-400">
+                {uploading ? '...' : 'Фото'}
+                <input type="file" accept="image/*" className="hidden" onChange={e => {
+                  if (e.target.files?.[0]) uploadImage(mat.id, e.target.files[0]);
+                }} />
+              </label>
               <button onClick={() => startEdit(mat)} className="text-gray-400 hover:text-white text-sm">Изменить</button>
               <button onClick={() => remove(mat.id)} className="text-red-400 hover:text-red-300 text-sm">Удалить</button>
             </div>

@@ -4,7 +4,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } 
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '../supabase';
 
-function SortableCustomizationRow({ item }) {
+function SortableCustomizationRow({ item, onUploadImage, uploading }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -22,6 +22,12 @@ function SortableCustomizationRow({ item }) {
       {...listeners}
     >
       <span className="text-gray-500 text-lg leading-none" aria-hidden>::</span>
+      <div className="w-12 h-12 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
+        {item.image_url
+          ? <img src={item.image_url} className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">—</div>
+        }
+      </div>
       <div className="flex-1">
         <span className="font-medium text-sm">{item.name}</span>
         {item.description && <span className="text-gray-500 text-xs ml-2">{item.description}</span>}
@@ -30,6 +36,13 @@ function SortableCustomizationRow({ item }) {
       <span className={`text-xs ${item.is_active ? 'text-green-400' : 'text-gray-500'}`}>
         {item.is_active ? 'Активна' : 'Скрыта'}
       </span>
+      <label className="text-xs text-gray-400 cursor-pointer hover:text-orange-400">
+        {uploading ? '...' : 'Фото'}
+        <input type="file" accept="image/*" className="hidden" onChange={e => {
+          e.stopPropagation();
+          if (e.target.files?.[0]) onUploadImage(item.id, e.target.files[0]);
+        }} />
+      </label>
     </div>
   );
 }
@@ -39,6 +52,7 @@ export default function Customizations() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', price: 0, is_active: true });
+  const [uploading, setUploading] = useState(false);
   const [sortMode, setSortMode] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
@@ -101,6 +115,17 @@ export default function Customizations() {
     if (!confirm('Удалить кастомизацию?')) return;
     await supabase.from('customizations').delete().eq('id', id);
     setItems((prev) => prev.filter((x) => x.id !== id));
+  }
+
+  async function uploadImage(itemId, file) {
+    setUploading(true);
+    const path = `customizations/${itemId}-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadErr } = await supabase.storage.from('images').upload(path, file);
+    if (uploadErr) { alert(uploadErr.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(path);
+    await supabase.from('customizations').update({ image_url: publicUrl }).eq('id', itemId);
+    setUploading(false);
+    setItems((prev) => prev.map((x) => (x.id === itemId ? { ...x, image_url: publicUrl } : x)));
   }
 
   async function saveOrder(nextRows) {
@@ -200,7 +225,7 @@ export default function Customizations() {
             <SortableContext items={sortedItems.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {sortedItems.map((item) => (
-                  <SortableCustomizationRow key={item.id} item={item} />
+                  <SortableCustomizationRow key={item.id} item={item} uploading={uploading} onUploadImage={uploadImage} />
                 ))}
               </div>
             </SortableContext>
@@ -210,6 +235,12 @@ export default function Customizations() {
         <div className="space-y-2">
           {sortedItems.map(item => (
             <div key={item.id} className="bg-gray-800 p-3 rounded-xl flex flex-wrap items-center gap-3">
+              <div className="w-12 h-12 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
+                {item.image_url
+                  ? <img src={item.image_url} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">—</div>
+                }
+              </div>
               <div className="flex-1">
                 <span className="font-medium text-sm">{item.name}</span>
                 {item.description && <span className="text-gray-500 text-xs ml-2">{item.description}</span>}
@@ -218,6 +249,12 @@ export default function Customizations() {
               <span className={`text-xs ${item.is_active ? 'text-green-400' : 'text-gray-500'}`}>
                 {item.is_active ? 'Активна' : 'Скрыта'}
               </span>
+              <label className="text-xs text-gray-400 cursor-pointer hover:text-orange-400">
+                {uploading ? '...' : 'Фото'}
+                <input type="file" accept="image/*" className="hidden" onChange={e => {
+                  if (e.target.files?.[0]) uploadImage(item.id, e.target.files[0]);
+                }} />
+              </label>
               <button onClick={() => startEdit(item)} className="text-gray-400 hover:text-white text-sm">Изменить</button>
               <button onClick={() => remove(item.id)} className="text-red-400 hover:text-red-300 text-sm">Удалить</button>
             </div>

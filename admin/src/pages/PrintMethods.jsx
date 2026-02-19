@@ -4,7 +4,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } 
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '../supabase';
 
-function SortablePrintRow({ method }) {
+function SortablePrintRow({ method, onUploadImage, uploading }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: method.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -22,10 +22,23 @@ function SortablePrintRow({ method }) {
       {...listeners}
     >
       <span className="text-gray-500 text-lg leading-none" aria-hidden>::</span>
+      <div className="w-12 h-12 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
+        {method.image_url
+          ? <img src={method.image_url} className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">—</div>
+        }
+      </div>
       <div className="flex-1">
         <span className="font-medium text-sm">{method.name}</span>
       </div>
       <span className="text-sm text-gray-400">{Number(method.price)} ₽</span>
+      <label className="text-xs text-gray-400 cursor-pointer hover:text-orange-400">
+        {uploading ? '...' : 'Фото'}
+        <input type="file" accept="image/*" className="hidden" onChange={e => {
+          e.stopPropagation();
+          if (e.target.files?.[0]) onUploadImage(method.id, e.target.files[0]);
+        }} />
+      </label>
     </div>
   );
 }
@@ -35,6 +48,7 @@ export default function PrintMethods() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', price: 0 });
+  const [uploading, setUploading] = useState(false);
   const [sortMode, setSortMode] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
@@ -88,6 +102,17 @@ export default function PrintMethods() {
     if (!confirm('Удалить метод нанесения?')) return;
     await supabase.from('print_methods').delete().eq('id', id);
     setMethods((prev) => prev.filter((x) => x.id !== id));
+  }
+
+  async function uploadImage(methodId, file) {
+    setUploading(true);
+    const path = `print_methods/${methodId}-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadErr } = await supabase.storage.from('images').upload(path, file);
+    if (uploadErr) { alert(uploadErr.message); setUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(path);
+    await supabase.from('print_methods').update({ image_url: publicUrl }).eq('id', methodId);
+    setUploading(false);
+    setMethods((prev) => prev.map((x) => (x.id === methodId ? { ...x, image_url: publicUrl } : x)));
   }
 
   async function saveOrder(nextRows) {
@@ -168,7 +193,7 @@ export default function PrintMethods() {
             <SortableContext items={sortedMethods.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {sortedMethods.map((method) => (
-                  <SortablePrintRow key={method.id} method={method} />
+                  <SortablePrintRow key={method.id} method={method} uploading={uploading} onUploadImage={uploadImage} />
                 ))}
               </div>
             </SortableContext>
@@ -178,10 +203,22 @@ export default function PrintMethods() {
         <div className="space-y-2">
           {sortedMethods.map(m => (
             <div key={m.id} className="bg-gray-800 p-3 rounded-xl flex flex-wrap items-center gap-3">
+              <div className="w-12 h-12 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
+                {m.image_url
+                  ? <img src={m.image_url} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">—</div>
+                }
+              </div>
               <div className="flex-1">
                 <span className="font-medium text-sm">{m.name}</span>
               </div>
               <span className="text-sm text-gray-400">{Number(m.price)} ₽</span>
+              <label className="text-xs text-gray-400 cursor-pointer hover:text-orange-400">
+                {uploading ? '...' : 'Фото'}
+                <input type="file" accept="image/*" className="hidden" onChange={e => {
+                  if (e.target.files?.[0]) uploadImage(m.id, e.target.files[0]);
+                }} />
+              </label>
               <button onClick={() => startEdit(m)} className="text-gray-400 hover:text-white text-sm">Изменить</button>
               <button onClick={() => remove(m.id)} className="text-red-400 hover:text-red-300 text-sm">Удалить</button>
             </div>
